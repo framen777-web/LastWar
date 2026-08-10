@@ -1,0 +1,110 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Member {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  aliases      String   @default("")
+  allianceRank String?
+  power        Int?
+  level        Int?
+  status       String?
+  lastActive   String?
+  squadAir     Float?
+  squadTank    Float?
+  squadMissile Float?
+  squadFourth  Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  weeklyStats     WeeklyStat[]
+  categoryRecords CategoryRecord[]
+}
+
+model Category {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique
+  name         String   @unique
+  description  String?
+  shape        String
+  divisor      Float    @default(1)
+  divisorLabel String?
+  importMode   String   @default("single")
+  dedupField   String?
+  storedFields String   @default("[]")
+  valueField   String   @default("value")
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  records CategoryRecord[]
+}
+
+// Simple key/value app settings (e.g. WhatsApp share number), configured from Setup.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model RawExtraction {
+  id            Int      @id @default(autoincrement())
+  imageFilename String
+  categoryKey   String
+  weekNumber    Int
+  rawJson       String
+  confidence    Float
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+}
+
+model WeeklyStat {
+  id          Int      @id @default(autoincrement())
+  memberId    Int
+  member      Member   @relation(fields: [memberId], references: [id])
+  weekNumber  Int
+  categoryKey String
+  value       Float
+  rank        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([memberId, weekNumber, categoryKey])
+}
+
+// Generalizes what used to be a bespoke AE-only import table to every category: one
+// row per import. Single-mode categories always write dedupKey "" (re-upload
+// overwrites in place); multi-mode categories
+// resolve dedupKey from the category's configured dedupField (e.g. an in-image event
+// date), so re-processed fragments of the same event update in place while a genuinely
+// new value adds a new summed row. WeeklyStat.<categoryKey> is always the sum of a
+// member/week's CategoryRecord rows for that category.
+model CategoryRecord {
+  id         Int      @id @default(autoincrement())
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+  memberId   Int
+  member     Member   @relation(fields: [memberId], references: [id])
+  weekNumber Int
+  dedupKey   String   @default("")
+  rawValue   Float
+  value      Float
+  rank       Int?
+  fields     String   @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, memberId, weekNumber, dedupKey])
+}
