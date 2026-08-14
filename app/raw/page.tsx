@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth/dal";
 
 const STATUS_STYLES: Record<string, string> = {
   committed: "bg-green-100 text-green-800",
@@ -7,6 +8,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default async function RawDataPage() {
+  await requireAdmin();
   const extractions = await prisma.rawExtraction.findMany({
     orderBy: { createdAt: "desc" },
     take: 100,

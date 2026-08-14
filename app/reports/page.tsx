@@ -1,6 +1,9 @@
 import { MenuButton } from "@/components/MenuButton";
+import { requireRole } from "@/lib/auth/dal";
 
-export default function ReportsIndexPage() {
+export default async function ReportsIndexPage() {
+  await requireRole(["ADMIN", "LEADER"]);
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Weekly Reports</h1>
@@ -24,6 +27,21 @@ export default function ReportsIndexPage() {
           href="/reports/squad-power"
           label="Squad Power & Growth"
           description="Top squad type, 3-squad power, and week-over-week growth"
+        />
+        <MenuButton
+          href="/reports/mvp"
+          label="MVP Report"
+          description="Weighted MVP leaderboard for a week"
+        />
+        <MenuButton
+          href="/reports/r1"
+          label="R1 Report"
+          description="Rank-filtered members, VS/MVP trend, Promote/Watch"
+        />
+        <MenuButton
+          href="/reports/clubs"
+          label="VS Clubs"
+          description="Achievement tiers by best-ever VS reading"
         />
       </div>
     </div>

@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateCategoryInput, type CategoryInput } from "@/lib/categories/validate";
 import { recomputeCategoryFromRawValue } from "@/lib/pipeline/run";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 const RECOMPUTE_TRIGGER_FIELDS = ["divisor", "valueField", "importMode", "dedupField"] as const;
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/categories/[id]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const { id } = await ctx.params;
   const categoryId = Number(id);
 
@@ -27,6 +31,11 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
     storedFields: patch.storedFields ?? JSON.parse(existing.storedFields),
     valueField: patch.valueField ?? existing.valueField,
     active: patch.active !== undefined ? patch.active : existing.active,
+    cumulative: patch.cumulative !== undefined ? patch.cumulative : existing.cumulative,
+    conductorMode: patch.conductorMode ?? existing.conductorMode,
+    conductorPointsPerUnit: patch.conductorPointsPerUnit !== undefined ? patch.conductorPointsPerUnit : existing.conductorPointsPerUnit,
+    conductorUnitSize: patch.conductorUnitSize !== undefined ? patch.conductorUnitSize : existing.conductorUnitSize,
+    conductorFlatValue: patch.conductorFlatValue !== undefined ? patch.conductorFlatValue : existing.conductorFlatValue,
   };
 
   const errors = validateCategoryInput(merged);
@@ -44,6 +53,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
   const needsRecompute = RECOMPUTE_TRIGGER_FIELDS.some((field) => patch[field] !== undefined && patch[field] !== (existing as unknown as Record<string, unknown>)[field]);
 
   const isFreeText = merged.shape === "free_text";
+  const conductorMode = merged.conductorMode ?? "off";
 
   const updated = await prisma.category.update({
     where: { id: categoryId },
@@ -59,6 +69,11 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
       valueField: isFreeText ? "" : merged.valueField,
       active: merged.active,
       sortOrder: patch.sortOrder ?? existing.sortOrder,
+      cumulative: isFreeText ? false : (merged.cumulative ?? false),
+      conductorMode,
+      conductorPointsPerUnit: conductorMode === "rate" ? (merged.conductorPointsPerUnit ?? null) : null,
+      conductorUnitSize: conductorMode === "rate" ? (merged.conductorUnitSize ?? null) : null,
+      conductorFlatValue: conductorMode === "flat" ? (merged.conductorFlatValue ?? null) : null,
     },
   });
 
@@ -71,6 +86,9 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
 }
 
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/categories/[id]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const { id } = await ctx.params;
   const categoryId = Number(id);
 

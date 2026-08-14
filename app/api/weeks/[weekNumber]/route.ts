@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/weeks/[weekNumber]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const { weekNumber: weekNumberParam } = await ctx.params;
   const weekNumber = Number(weekNumberParam);
 

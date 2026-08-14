@@ -3,6 +3,11 @@
 import { useState } from "react";
 import html2canvas from "html2canvas";
 
+// Plain single-color properties, swapped directly - plus shorthands (box-shadow,
+// text-shadow) that can *embed* a color function inside a larger value, handled below
+// by pattern-matching instead. SVG icons' fill/stroke often resolve `currentColor` to a
+// modern color function even on browsers/elements where the equivalent `color` property
+// serializes differently, so those need covering separately from `color` itself.
 const COLOR_PROPS = [
   "color",
   "backgroundColor",
@@ -10,27 +15,63 @@ const COLOR_PROPS = [
   "borderRightColor",
   "borderBottomColor",
   "borderLeftColor",
+  "outlineColor",
+  "textDecorationColor",
+  "caretColor",
+  "columnRuleColor",
+  "accentColor",
+  "fill",
+  "stroke",
 ] as const;
 
+const SHORTHAND_PROPS = ["boxShadow", "textShadow"] as const;
+
+// Non-global, used only to cheaply test whether a value needs touching at all - a global
+// regex's .test() mutates lastIndex across calls, which would silently skip matches.
+const HAS_MODERN_COLOR_FN = /\b(?:oklch|lab|lch|color|hwb)\(/;
+const MODERN_COLOR_FN_G = /\b(?:oklch|lab|lch|color|hwb)\([^()]*\)/g;
+
 // Tailwind v4's palette is authored in oklch(), which html2canvas can't parse
-// ("unsupported color function"). The canvas 2D API can resolve *any* valid CSS
-// color - including oklch/lab/lch - into a plain rgb() string, so round-tripping
-// every element's colors through a scratch canvas normalizes them before capture.
+// ("unsupported color function") - and depending on the property, the browser can
+// resolve `currentColor` back out as oklch(), lab(), or other CSS Color 4 functions
+// html2canvas equally can't parse. The canvas 2D API can resolve *any* valid CSS color
+// into a plain rgb() string, so round-tripping every matched color function through a
+// scratch canvas normalizes them before capture.
 function normalizeColors(root: HTMLElement) {
   const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
+  // Setting fillStyle to a color-function string and reading it back does NOT reliably
+  // downgrade it to rgb() on current Chrome - the fillStyle getter now preserves whatever
+  // CSS Color 4 syntax it was given, so a lab()/oklch() input comes back out unchanged.
+  // Actually rasterizing a pixel and reading its resolved bytes back always yields a
+  // concrete sRGB value regardless of the input color space, so that's used instead.
+  function resolve(colorFn: string): string {
+    ctx!.clearRect(0, 0, 1, 1);
+    ctx!.fillStyle = colorFn;
+    ctx!.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx!.getImageData(0, 0, 1, 1).data;
+    return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+  }
 
   const elements: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
   for (const el of elements) {
     const computed = getComputedStyle(el);
+    const style = el.style as unknown as Record<string, string>;
+
     for (const prop of COLOR_PROPS) {
       const value = computed[prop];
-      if (!value) continue;
-      ctx.fillStyle = "#000000";
-      ctx.fillStyle = value;
-      const normalized = ctx.fillStyle as string;
-      (el.style as unknown as Record<string, string>)[prop] = normalized;
+      if (!value || !HAS_MODERN_COLOR_FN.test(value)) continue;
+      style[prop] = resolve(value);
+    }
+
+    for (const prop of SHORTHAND_PROPS) {
+      const value = computed[prop];
+      if (!value || !HAS_MODERN_COLOR_FN.test(value)) continue;
+      style[prop] = value.replace(MODERN_COLOR_FN_G, resolve);
     }
   }
 }

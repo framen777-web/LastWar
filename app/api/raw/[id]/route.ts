@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { confirmRawExtraction, rejectRawExtraction } from "@/lib/pipeline/run";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/raw/[id]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const { id } = await ctx.params;
   const rawExtractionId = Number(id);
 

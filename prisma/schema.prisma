@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Member {
@@ -17,8 +17,6 @@ model Member {
   name         String   @unique
   aliases      String   @default("")
   allianceRank String?
-  power        Int?
-  level        Int?
   status       String?
   lastActive   String?
   squadAir     Float?
@@ -28,8 +26,17 @@ model Member {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  weeklyStats     WeeklyStat[]
-  categoryRecords CategoryRecord[]
+  // Login access. passwordHash null = no login access granted yet. role null = auto
+  // (derive from allianceRank, see lib/auth/roles.ts); non-null = manual override.
+  passwordHash String?
+  role         String?
+  isActive     Boolean  @default(true)
+  theme        String   @default("default")
+
+  weeklyStats         WeeklyStat[]
+  categoryRecords     CategoryRecord[]
+  suggestions         Suggestion[]
+  conductorSelections ConductorSelection[]
 }
 
 model Category {
@@ -49,6 +56,19 @@ model Category {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now()) @updatedAt
 
+  // Lifetime-cumulative raw reading (e.g. Kills) rather than a per-week figure - the
+  // Conductor points engine and Passenger ranking need the week-over-week gain, not the
+  // raw value, for any category flagged this way.
+  cumulative Boolean @default(false)
+
+  // Conductor points config: "off" | "rate" | "flat". "rate" scores
+  // (weekly value / conductorUnitSize) * conductorPointsPerUnit; "flat" scores
+  // conductorFlatValue if the member has any value for that week, regardless of size.
+  conductorMode          String @default("off")
+  conductorPointsPerUnit Float?
+  conductorUnitSize      Float?
+  conductorFlatValue     Float?
+
   records CategoryRecord[]
 }
 
@@ -57,6 +77,19 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// The R1 Report's Promote/Watch flag, keyed per member per week so notes from
+// one week never bleed into another.
+model Suggestion {
+  id         Int      @id @default(autoincrement())
+  memberId   Int
+  member     Member   @relation(fields: [memberId], references: [id])
+  weekNumber Int
+  value      String?
+  updatedAt  DateTime @updatedAt
+
+  @@unique([memberId, weekNumber])
 }
 
 model RawExtraction {
@@ -107,4 +140,45 @@ model CategoryRecord {
   updatedAt  DateTime @updatedAt
 
   @@unique([categoryId, memberId, weekNumber, dedupKey])
+}
+
+// A rotation cycle: weeksInCycle * 7 conductor slots and the same number of passenger
+// slots, one of each per calendar day. "draft" rounds can still be edited/regenerated;
+// "confirmed" is final and is what standings/history read from.
+model ConductorRound {
+  id           Int       @id @default(autoincrement())
+  weeksInCycle Int
+  startWeek    Int
+  status       String    @default("draft")
+  source       String    @default("generated") // "generated" | "imported" (backfilled history)
+  createdAt    DateTime  @default(now())
+  confirmedAt  DateTime?
+
+  selections ConductorSelection[]
+}
+
+// One member filling one role for one day of a round. Conductor rows freeze the
+// member's points balance at selection time in `pointsAtSelection` - that frozen value
+// doubles as the ledger "reset" amount standings subtract back out, so no separate
+// ledger table is needed. Passenger rows never touch points; they record which
+// category/rank (or "random") produced the pick for audit purposes. `memberId` is
+// nullable so a slot with no eligible candidate (fewer active members than slots, or
+// fewer submissions than a rule's rank that week) still gets a row the admin can fill
+// in via override, instead of silently having no row at all.
+model ConductorSelection {
+  id                Int      @id @default(autoincrement())
+  roundId           Int
+  round             ConductorRound @relation(fields: [roundId], references: [id])
+  memberId          Int?
+  member            Member?  @relation(fields: [memberId], references: [id])
+  role              String // "conductor" | "passenger"
+  slotIndex         Int // 0-based day within the cycle
+  weekNumber        Int // which in-cycle week this slot's data was evaluated against
+  pointsAtSelection Float? // conductor only
+  sourceCategoryKey String? // passenger only - null means "random"
+  sourceRank        Int? // passenger only
+  manualOverride    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  @@unique([roundId, slotIndex, role])
 }

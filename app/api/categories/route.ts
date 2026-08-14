@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateCategoryInput, slugify, type CategoryInput } from "@/lib/categories/validate";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function GET() {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const categories = await prisma.category.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
@@ -15,6 +19,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const body = (await request.json()) as CategoryInput;
 
   const errors = validateCategoryInput(body);
@@ -41,6 +48,7 @@ export async function POST(request: Request) {
 
   const isFreeText = body.shape === "free_text";
 
+  const conductorMode = body.conductorMode ?? "off";
   const category = await prisma.category.create({
     data: {
       key,
@@ -55,6 +63,11 @@ export async function POST(request: Request) {
       valueField: isFreeText ? "" : body.valueField!,
       active: body.active ?? true,
       sortOrder: maxSortOrder + 1,
+      cumulative: isFreeText ? false : (body.cumulative ?? false),
+      conductorMode,
+      conductorPointsPerUnit: conductorMode === "rate" ? (body.conductorPointsPerUnit ?? null) : null,
+      conductorUnitSize: conductorMode === "rate" ? (body.conductorUnitSize ?? null) : null,
+      conductorFlatValue: conductorMode === "flat" ? (body.conductorFlatValue ?? null) : null,
     },
   });
 

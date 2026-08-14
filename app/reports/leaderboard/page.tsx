@@ -2,7 +2,12 @@ import { prisma } from "@/lib/db";
 import { ZoomWrapper } from "@/components/ZoomWrapper";
 import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
 import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth/dal";
+import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
+import { LimitSelect } from "@/components/LimitSelect";
 
 // Kills is a lifetime-cumulative reading in-game (never resets) - "this week" and
 // "last N weeks" have to be computed as the gain between cumulative readings, not the
@@ -18,10 +23,6 @@ const LEADERBOARD_CATEGORIES = [
 const IMPROVEMENT_CAP = 500;
 
 type SeriesRow = { weekNumber: number; memberId: number; memberName: string; value: number };
-
-function formatNumber(n: number): string {
-  return Math.round(n).toLocaleString();
-}
 
 // For non-cumulative categories, the series is just the raw stored values. For
 // cumulative categories (Kills), each reading is converted into the gain since that
@@ -58,15 +59,12 @@ function recentWeeksFromSeries(series: SeriesRow[], maxWeek: number, limit: numb
   return weeks.slice(0, limit);
 }
 
-function topThisWeek(series: SeriesRow[], week: number, limit = 20) {
-  return series
-    .filter((r) => r.weekNumber === week)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit)
-    .map((r) => ({ name: r.memberName, value: r.value }));
+function topThisWeek(series: SeriesRow[], week: number, limit: string) {
+  const sorted = series.filter((r) => r.weekNumber === week).sort((a, b) => b.value - a.value);
+  return applyLimit(sorted, limit).map((r) => ({ name: r.memberName, value: r.value }));
 }
 
-function topSumOverWeeks(series: SeriesRow[], weeks: number[], limit = 20) {
+function topSumOverWeeks(series: SeriesRow[], weeks: number[], limit: string) {
   if (weeks.length === 0) return [];
   const weekSet = new Set(weeks);
   const sums = new Map<number, { name: string; total: number }>();
@@ -76,12 +74,13 @@ function topSumOverWeeks(series: SeriesRow[], weeks: number[], limit = 20) {
     entry.total += r.value;
     sums.set(r.memberId, entry);
   }
-  return Array.from(sums.values())
-    .sort((a, b) => b.total - a.total)
-    .slice(0, limit);
+  return applyLimit(
+    Array.from(sums.values()).sort((a, b) => b.total - a.total),
+    limit
+  );
 }
 
-function getImprovement(series: SeriesRow[], week: number, limit = 20) {
+function getImprovement(series: SeriesRow[], week: number, limit: string) {
   const thisWeekRows = series.filter((r) => r.weekNumber === week);
   const priorWeeks = new Set(recentWeeksFromSeries(series, week, 5, false));
 
@@ -93,41 +92,49 @@ function getImprovement(series: SeriesRow[], week: number, limit = 20) {
     priorCount.set(r.memberId, (priorCount.get(r.memberId) ?? 0) + 1);
   }
 
-  const results = thisWeekRows.map((r) => {
-    const count = priorCount.get(r.memberId) ?? 0;
-    const avg = count > 0 ? priorSum.get(r.memberId)! / count : 0;
-    const pct = avg > 0 ? Math.min(IMPROVEMENT_CAP, Math.round((r.value / avg) * 100)) : IMPROVEMENT_CAP;
-    return { name: r.memberName, pct };
-  });
+  // No prior reading to compare against (new member, or every prior week missing) means
+  // improvement genuinely can't be computed - excluded rather than shown as a fake 500%
+  // (the old fallback made every such member look like a 5x improvement).
+  const results = thisWeekRows
+    .map((r) => {
+      const count = priorCount.get(r.memberId) ?? 0;
+      const avg = count > 0 ? priorSum.get(r.memberId)! / count : 0;
+      if (avg <= 0) return null;
+      return { name: r.memberName, pct: Math.min(IMPROVEMENT_CAP, Math.round((r.value / avg) * 100)) };
+    })
+    .filter((r): r is { name: string; pct: number } => r !== null);
 
-  return results.sort((a, b) => b.pct - a.pct).slice(0, limit);
+  return applyLimit(
+    results.sort((a, b) => b.pct - a.pct),
+    limit
+  );
 }
 
-// All-time panel: non-cumulative categories surface each member's single best week ever
-// (and which week); the cumulative category (Kills) instead surfaces their latest/highest
-// raw reading, since that reading already *is* their lifetime total.
-async function getAllTimeBestWeek(categoryKey: string, limit = 20) {
+// All-time panel: non-cumulative categories surface the top individual week-records
+// across everyone - the same member can appear more than once if they've had several
+// top-ranking weeks, this is a leaderboard of weeks, not of members. The cumulative
+// category (Kills) instead surfaces each member's latest/highest raw reading, since
+// that reading already *is* their lifetime total (see getLatestCumulative below).
+async function getAllTimeBestWeek(categoryKey: string, limit: string) {
   const stats = await prisma.weeklyStat.findMany({ where: { categoryKey }, include: { member: true } });
-  const best = new Map<number, { name: string; value: number; week: number }>();
-  for (const s of stats) {
-    const cur = best.get(s.memberId);
-    if (!cur || s.value > cur.value) best.set(s.memberId, { name: s.member.name, value: s.value, week: s.weekNumber });
-  }
-  return Array.from(best.values())
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
+  const rows = stats.map((s) => ({ name: s.member.name, value: s.value, week: s.weekNumber }));
+  return applyLimit(
+    rows.sort((a, b) => b.value - a.value),
+    limit
+  );
 }
 
-async function getLatestCumulative(categoryKey: string, limit = 20) {
+async function getLatestCumulative(categoryKey: string, limit: string) {
   const stats = await prisma.weeklyStat.findMany({ where: { categoryKey }, include: { member: true } });
   const latest = new Map<number, { name: string; value: number; week: number }>();
   for (const s of stats) {
     const cur = latest.get(s.memberId);
     if (!cur || s.weekNumber > cur.week) latest.set(s.memberId, { name: s.member.name, value: s.value, week: s.weekNumber });
   }
-  return Array.from(latest.values())
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
+  return applyLimit(
+    Array.from(latest.values()).sort((a, b) => b.value - a.value),
+    limit
+  );
 }
 
 function formatShareText(
@@ -143,7 +150,7 @@ function formatShareText(
   const top = (rows: { name: string; value: number }[]) =>
     rows
       .slice(0, 10)
-      .map((r, i) => `${i + 1}. ${r.name}: ${formatNumber(r.value)}`)
+      .map((r, i) => `${i + 1}. ${r.name}: ${formatStatNumber(r.value)}`)
       .join("\n") || "None";
 
   const lines = [
@@ -171,6 +178,7 @@ function formatShareText(
 }
 
 export default async function LeaderboardPage({ searchParams }: PageProps<"/reports/leaderboard">) {
+  await requireRole(["ADMIN", "LEADER"]);
   const params = await searchParams;
 
   const categoryParam = Array.isArray(params.category) ? params.category[0] : params.category;
@@ -188,20 +196,23 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
   const weekParam = Array.isArray(params.week) ? params.week[0] : params.week;
   const selectedWeek = weekParam ? Number(weekParam) : defaultWeek;
 
+  const selectedLimit = parseLimitParam(params.limit, "20");
+  const limitLabel = selectedLimit === "all" ? "All" : `Top ${selectedLimit}`;
+
   const series = await getCategorySeries(selectedCategory.key, selectedCategory.cumulative);
 
   const last5Weeks = recentWeeksFromSeries(series, selectedWeek, 5, true);
   const last10Weeks = recentWeeksFromSeries(series, selectedWeek, 10, true);
 
-  const thisWeek = topThisWeek(series, selectedWeek);
-  const last5 = topSumOverWeeks(series, last5Weeks);
-  const last10 = topSumOverWeeks(series, last10Weeks);
-  const improvement = getImprovement(series, selectedWeek);
+  const thisWeek = topThisWeek(series, selectedWeek, selectedLimit);
+  const last5 = topSumOverWeeks(series, last5Weeks, selectedLimit);
+  const last10 = topSumOverWeeks(series, last10Weeks, selectedLimit);
+  const improvement = getImprovement(series, selectedWeek, selectedLimit);
   const allTime = selectedCategory.cumulative
-    ? await getLatestCumulative(selectedCategory.key)
-    : await getAllTimeBestWeek(selectedCategory.key);
+    ? await getLatestCumulative(selectedCategory.key, selectedLimit)
+    : await getAllTimeBestWeek(selectedCategory.key, selectedLimit);
 
-  const allTimeLabel = selectedCategory.cumulative ? `Total ${selectedCategory.label}` : "All time Top 20";
+  const allTimeLabel = selectedCategory.cumulative ? `Total ${selectedCategory.label}` : `All time ${limitLabel}`;
   const allTimeValueLabel = selectedCategory.cumulative ? `All ${selectedCategory.label}` : "Total Score";
 
   const shareText = formatShareText(
@@ -260,7 +271,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-neutral-900 text-white rounded px-3 py-1">
+
+        <LimitSelect defaultValue={selectedLimit} />
+
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
       </form>
@@ -275,12 +289,12 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
       </div>
 
       <ZoomWrapper contentId="leaderboard-content">
-      <div className="flex flex-row flex-nowrap items-start gap-4 overflow-x-auto">
-        <Panel title={`Top 20 ${selectedCategory.label} from this week`} headerClass="bg-pink-300">
+      <div className="flex flex-row flex-nowrap items-start gap-4">
+        <Panel title={`${limitLabel} ${selectedCategory.label} from this week`} headerClass="bg-pink-300">
           {thisWeek.length === 0 ? <Empty /> : <SimpleTable rows={thisWeek} valueLabel={selectedCategory.label} />}
         </Panel>
 
-        <Panel title={`Top 20 ${selectedCategory.label} from last 5 weeks`} headerClass="bg-sky-300">
+        <Panel title={`${limitLabel} ${selectedCategory.label} from last 5 weeks`} headerClass="bg-sky-300">
           {last5.length === 0 ? (
             <Empty />
           ) : (
@@ -288,7 +302,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
           )}
         </Panel>
 
-        <Panel title={`Top 20 ${selectedCategory.label} from last 10 weeks`} headerClass="bg-amber-300">
+        <Panel title={`${limitLabel} ${selectedCategory.label} from last 10 weeks`} headerClass="bg-amber-300">
           {last10.length === 0 ? (
             <Empty />
           ) : (
@@ -300,53 +314,51 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
           {improvement.length === 0 ? (
             <Empty />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-200 text-left">
-                    <th className="py-0.5 px-3">Name</th>
-                    <th className="py-0.5 px-3">Improvement</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {improvement.map((r) => (
-                    <tr key={r.name} className="border-b border-neutral-100">
-                      <td className="py-0.5 px-3 font-medium whitespace-nowrap">{r.name}</td>
-                      <td className="py-0.5 px-3">{r.pct}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={[
+                { key: "name", header: "Name", filter: "text", width: REPORT_NAME_COL_WIDTH },
+                { key: "pct", header: "Improvement", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+              ]}
+              rows={improvement.map((r, i) => ({
+                id: i,
+                cells: { name: <span className="font-medium">{r.name}</span>, pct: `${r.pct}%` },
+                sortValues: { name: r.name, pct: r.pct },
+              }))}
+              defaultSort={{ key: "pct", direction: "desc" }}
+              dense
+              fitContent
+            />
           )}
         </Panel>
 
-        <Panel title={allTimeLabel} headerClass="bg-red-300" width={!selectedCategory.cumulative ? "w-[320px]" : undefined}>
+        <Panel title={allTimeLabel} headerClass="bg-red-300">
           {allTime.length === 0 ? (
             <Empty />
           ) : selectedCategory.cumulative ? (
             <SimpleTable rows={allTime.map((r) => ({ name: r.name, value: r.value }))} valueLabel={allTimeValueLabel} />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-200 text-left">
-                    <th className="py-0.5 px-3">Name</th>
-                    <th className="py-0.5 px-3">Week</th>
-                    <th className="py-0.5 px-3">{allTimeValueLabel}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allTime.map((r) => (
-                    <tr key={r.name} className="border-b border-neutral-100">
-                      <td className="py-0.5 px-3 font-medium whitespace-nowrap">{r.name}</td>
-                      <td className="py-0.5 px-3 text-neutral-500">{r.week}</td>
-                      <td className="py-0.5 px-3">{formatNumber(r.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={[
+                { key: "name", header: "Name", filter: "text", width: REPORT_NAME_COL_WIDTH },
+                { key: "week", header: "Week", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+                { key: "value", header: allTimeValueLabel, filter: "number", width: REPORT_VALUE_COL_WIDTH },
+              ]}
+              rows={(() => {
+                const rule = pickNumberFormat(allTime.map((r) => r.value));
+                return allTime.map((r) => ({
+                  id: `${r.name}:${r.week}`,
+                  cells: {
+                    name: <span className="font-medium">{r.name}</span>,
+                    week: <span className="text-neutral-500">{r.week}</span>,
+                    value: formatWithRule(r.value, rule),
+                  },
+                  sortValues: { name: r.name, week: r.week, value: r.value },
+                }));
+              })()}
+              defaultSort={{ key: "value", direction: "desc" }}
+              dense
+              fitContent
+            />
           )}
         </Panel>
       </div>
@@ -358,16 +370,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
 function Panel({
   title,
   headerClass,
-  width,
   children,
 }: {
   title: string;
   headerClass: string;
-  width?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`border border-neutral-200 rounded overflow-hidden shrink-0 ${width ?? "w-[260px]"}`}>
+    <div className="border border-neutral-200 rounded overflow-hidden shrink-0">
       <div className={`${headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{title}</div>
       {children}
     </div>
@@ -379,28 +389,24 @@ function Empty() {
 }
 
 function SimpleTable({ rows, valueLabel }: { rows: { name: string; value: number }[]; valueLabel: string }) {
+  const columns: DataTableColumn[] = [
+    { key: "name", header: "Name", filter: "text", width: REPORT_NAME_COL_WIDTH },
+    { key: "value", header: valueLabel, filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  ];
+  const rule = pickNumberFormat(rows.map((r) => r.value));
+  const tableRows: DataTableRow[] = rows.map((r, i) => ({
+    id: i,
+    cells: { name: <span className="font-medium">{r.name}</span>, value: formatWithRule(r.value, rule) },
+    sortValues: { name: r.name, value: r.value },
+  }));
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-neutral-200 text-left">
-            <th className="py-0.5 px-3">Name</th>
-            <th className="py-0.5 px-3">{valueLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name} className="border-b border-neutral-100">
-              <td className="py-0.5 px-3 font-medium whitespace-nowrap">{r.name}</td>
-              <td className="py-0.5 px-3">{formatNumber(r.value)}</td>
-            </tr>
-          ))}
-          <tr className="font-semibold">
-            <td className="py-0.5 px-3">Total</td>
-            <td className="py-0.5 px-3">{formatNumber(rows.reduce((sum, r) => sum + r.value, 0))}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={tableRows}
+      defaultSort={{ key: "value", direction: "desc" }}
+      footer={{ label: "Total", sumKeys: ["value"] }}
+      dense
+      fitContent
+    />
   );
 }

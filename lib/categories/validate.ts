@@ -12,6 +12,11 @@ export type CategoryInput = {
   valueField?: string;
   active?: boolean;
   sortOrder?: number;
+  cumulative?: boolean;
+  conductorMode?: string;
+  conductorPointsPerUnit?: number | null;
+  conductorUnitSize?: number | null;
+  conductorFlatValue?: number | null;
 };
 
 export type ValidationError = { field: string; message: string };
@@ -76,6 +81,26 @@ export function validateCategoryInput(input: CategoryInput): ValidationError[] {
       } else if (Array.isArray(input.storedFields) && !input.storedFields.includes(input.dedupField)) {
         errors.push({ field: "dedupField", message: "Dedup field must be one of the stored fields." });
       }
+    }
+  }
+
+  if (input.conductorMode && !["off", "rate", "flat"].includes(input.conductorMode)) {
+    errors.push({ field: "conductorMode", message: "Conductor mode must be 'off', 'rate', or 'flat'." });
+  }
+  if (isFreeText && input.conductorMode === "rate") {
+    errors.push({ field: "conductorMode", message: "Free-text categories have no single value to rate - use flat or off." });
+  }
+  if (input.conductorMode === "rate") {
+    if (typeof input.conductorPointsPerUnit !== "number" || !Number.isFinite(input.conductorPointsPerUnit)) {
+      errors.push({ field: "conductorPointsPerUnit", message: "Points per unit is required for rate mode." });
+    }
+    if (typeof input.conductorUnitSize !== "number" || !Number.isFinite(input.conductorUnitSize) || input.conductorUnitSize <= 0) {
+      errors.push({ field: "conductorUnitSize", message: "Unit size must be a number greater than 0 for rate mode." });
+    }
+  }
+  if (input.conductorMode === "flat") {
+    if (typeof input.conductorFlatValue !== "number" || !Number.isFinite(input.conductorFlatValue)) {
+      errors.push({ field: "conductorFlatValue", message: "Flat point value is required for flat mode." });
     }
   }
 

@@ -1,19 +1,28 @@
 import { prisma } from "@/lib/db";
 import { DeleteWeekButton } from "@/components/DeleteWeekButton";
+import { MemberWeekActions } from "@/components/MemberWeekActions";
+import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { pickNumberFormat, formatWithRule } from "@/lib/format";
+import { requireRole } from "@/lib/auth/dal";
 
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
+  const user = await requireRole(["ADMIN", "LEADER", "MEMBER"]);
+  const ownScope = user.role === "MEMBER" ? { memberId: user.id } : {};
+
   const params = await searchParams;
 
   const allCategories = await prisma.category.findMany({
     where: { active: true },
     orderBy: { sortOrder: "asc" },
   });
-  // free_text categories (e.g. Squads) don't produce a WeeklyStat value - they write
-  // straight onto the member record instead, shown via the fixed Air/Tank/Missile/Fourth
-  // columns below.
+  // free_text categories (e.g. Squads) don't produce a WeeklyStat value - they're shown
+  // via the fixed Air/Tank/Missile/Fourth columns below instead, sourced per-week from
+  // CategoryRecord (see squadsByMember) rather than from the dynamic per-category columns.
   const categories = allCategories.filter((c) => c.shape !== "free_text");
+  const squadsCategory = allCategories.find((c) => c.key === "squads");
 
   const weeks = await prisma.weeklyStat.findMany({
+    where: ownScope,
     select: { weekNumber: true },
     distinct: ["weekNumber"],
     orderBy: { weekNumber: "desc" },
@@ -24,8 +33,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const weekParam = Array.isArray(params.week) ? params.week[0] : params.week;
   const selectedWeek = weekParam ? Number(weekParam) : defaultWeek;
 
+  // Members below MEMBER-scope: the query is filtered here, not just hidden in the UI - other
+  // members' rows are never fetched for a Member-role viewer.
   const stats = await prisma.weeklyStat.findMany({
-    where: { weekNumber: selectedWeek },
+    where: { weekNumber: selectedWeek, ...ownScope },
     include: { member: true },
   });
 
@@ -41,12 +52,28 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     statsByMember.get(stat.memberId)!.set(stat.categoryKey, { value: stat.value, rank: stat.rank });
   }
 
+  // Squads is free_text (no WeeklyStat row) - read this week's Air/Tank/Missile/Fourth
+  // straight from CategoryRecord, not from Member.squadAir etc (those are a frozen,
+  // no-longer-updated snapshot from before this per-week tracking existed - they'd show
+  // the same figure regardless of which week is selected here, which was the original bug
+  // this replaces).
+  type SquadsFields = { air: number | null; tank: number | null; missile: number | null; fourth: number | null };
+  const squadsByMember = new Map<number, SquadsFields>();
+  if (squadsCategory) {
+    const squadsRecords = await prisma.categoryRecord.findMany({
+      where: { categoryId: squadsCategory.id, weekNumber: selectedWeek, ...ownScope },
+    });
+    for (const r of squadsRecords) {
+      squadsByMember.set(r.memberId, JSON.parse(r.fields) as SquadsFields);
+    }
+  }
+
   const multiCategoryIds = categories.filter((c) => c.importMode === "multi").map((c) => c.id);
   const recordCounts =
     multiCategoryIds.length > 0
       ? await prisma.categoryRecord.groupBy({
           by: ["memberId", "categoryId"],
-          where: { weekNumber: selectedWeek, categoryId: { in: multiCategoryIds } },
+          where: { weekNumber: selectedWeek, categoryId: { in: multiCategoryIds }, ...ownScope },
           _count: { _all: true },
         })
       : [];
@@ -57,12 +84,81 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     recordCountByMemberCategory.set(key, r._count._all);
   }
 
-  const categoryRecordCountForWeek = await prisma.categoryRecord.count({ where: { weekNumber: selectedWeek } });
+  const categoryRecordCountForWeek = await prisma.categoryRecord.count({ where: { weekNumber: selectedWeek, ...ownScope } });
   const totalRecordCountForWeek = stats.length + categoryRecordCountForWeek;
+
+  const columns: DataTableColumn[] = [
+    ...(user.role === "ADMIN" ? [{ key: "actions", header: "" }] : []),
+    { key: "member", header: "Member", filter: "text" },
+    { key: "rank", header: "Rank", filter: "text" },
+    { key: "air", header: "Air", filter: "number" },
+    { key: "tank", header: "Tank", filter: "number" },
+    { key: "missile", header: "Missile", filter: "number" },
+    { key: "fourth", header: "Fourth", filter: "number" },
+    ...categories.map((c) => ({ key: c.key, header: c.name, filter: "number" as const })),
+  ];
+
+  // One formatting rule per column (not per value) - decided once from every member's
+  // value in that column, so a column never mixes "1,234" and "12.34" style rows.
+  const airRule = pickNumberFormat(members.map((m) => squadsByMember.get(m.id)?.air));
+  const tankRule = pickNumberFormat(members.map((m) => squadsByMember.get(m.id)?.tank));
+  const missileRule = pickNumberFormat(members.map((m) => squadsByMember.get(m.id)?.missile));
+  const fourthRule = pickNumberFormat(members.map((m) => squadsByMember.get(m.id)?.fourth));
+  const categoryRules = new Map(
+    categories.map((c) => [c.key, pickNumberFormat(members.map((m) => statsByMember.get(m.id)?.get(c.key)?.value))])
+  );
+
+  const rows: DataTableRow[] = members.map((member) => {
+    const memberStats = statsByMember.get(member.id) ?? new Map();
+    const squads = squadsByMember.get(member.id);
+    const rankStat = memberStats.get("alliance_rank");
+    const rankLabel = rankStat ? `R${rankStat.value}` : "—";
+
+    const cells: Record<string, React.ReactNode> = {
+      member: <span className="font-medium">{member.name}</span>,
+      rank: <span className="text-neutral-500">{rankLabel}</span>,
+      air: <span className="text-neutral-500">{formatWithRule(squads?.air, airRule)}</span>,
+      tank: <span className="text-neutral-500">{formatWithRule(squads?.tank, tankRule)}</span>,
+      missile: <span className="text-neutral-500">{formatWithRule(squads?.missile, missileRule)}</span>,
+      fourth: <span className="text-neutral-500">{formatWithRule(squads?.fourth, fourthRule)}</span>,
+    };
+    const sortValues: Record<string, number | string> = { member: member.name, rank: rankStat ? rankLabel : "" };
+    if (squads?.air != null) sortValues.air = squads.air;
+    if (squads?.tank != null) sortValues.tank = squads.tank;
+    if (squads?.missile != null) sortValues.missile = squads.missile;
+    if (squads?.fourth != null) sortValues.fourth = squads.fourth;
+
+    for (const c of categories) {
+      const stat = memberStats.get(c.key);
+      const recordCount = recordCountByMemberCategory.get(`${member.id}:${c.key}`) ?? 0;
+      cells[c.key] = (
+        <span className="text-neutral-700">
+          {formatWithRule(stat?.value, categoryRules.get(c.key)!)}
+          {c.importMode === "multi" && recordCount > 0 && <span className="text-neutral-400 text-xs"> · {recordCount}</span>}
+        </span>
+      );
+      if (stat) sortValues[c.key] = stat.value;
+    }
+
+    if (user.role === "ADMIN") {
+      cells.actions = (
+        <MemberWeekActions
+          weekNumber={selectedWeek}
+          memberId={member.id}
+          memberName={member.name}
+          rank={rankStat?.value ?? null}
+          categories={categories.map((c) => ({ key: c.key, name: c.name, value: memberStats.get(c.key)?.value ?? null }))}
+          squads={squads ?? null}
+        />
+      );
+    }
+
+    return { id: member.id, cells, sortValues };
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Weekly Info</h1>
+      <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "My Stats" : "Weekly Info"}</h1>
 
       <form className="flex items-center gap-2 text-sm">
         <label htmlFor="week" className="font-medium">
@@ -82,11 +178,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-neutral-900 text-white rounded px-3 py-1">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
 
-        {totalRecordCountForWeek > 0 && (
+        {user.role === "ADMIN" && totalRecordCountForWeek > 0 && (
           <DeleteWeekButton weekNumber={selectedWeek} recordCount={totalRecordCountForWeek} />
         )}
       </form>
@@ -94,54 +190,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {members.length === 0 ? (
         <p className="text-neutral-500 text-sm">No data for week {selectedWeek} yet.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-300 text-left">
-                <th className="py-2 pr-3">Member</th>
-                <th className="py-2 pr-3">Rank</th>
-                <th className="py-2 pr-3">HQ</th>
-                <th className="py-2 pr-3">Air</th>
-                <th className="py-2 pr-3">Tank</th>
-                <th className="py-2 pr-3">Missile</th>
-                <th className="py-2 pr-3">Fourth</th>
-                {categories.map((c) => (
-                  <th key={c.key} className="py-2 pr-3 whitespace-nowrap">
-                    {c.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => {
-                const memberStats = statsByMember.get(member.id) ?? new Map();
-                return (
-                  <tr key={member.id} className="border-b border-neutral-100">
-                    <td className="py-2 pr-3 font-medium whitespace-nowrap">{member.name}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.allianceRank ?? "—"}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.level ?? "—"}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.squadAir ?? "—"}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.squadTank ?? "—"}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.squadMissile ?? "—"}</td>
-                    <td className="py-2 pr-3 text-neutral-500">{member.squadFourth ?? "—"}</td>
-                    {categories.map((c) => {
-                      const stat = memberStats.get(c.key);
-                      const recordCount = recordCountByMemberCategory.get(`${member.id}:${c.key}`) ?? 0;
-                      return (
-                        <td key={c.key} className="py-2 pr-3 text-neutral-700 whitespace-nowrap">
-                          {stat?.value ?? "—"}
-                          {c.importMode === "multi" && recordCount > 0 && (
-                            <span className="text-neutral-400 text-xs"> · {recordCount}</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
       )}
     </div>
   );

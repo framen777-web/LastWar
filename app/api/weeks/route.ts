@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function GET() {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const weeks = await prisma.weeklyStat.findMany({
     select: { weekNumber: true },
     distinct: ["weekNumber"],

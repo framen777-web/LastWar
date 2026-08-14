@@ -126,26 +126,26 @@ const FREE_TEXT_SCHEMA = {
         type: "object",
         properties: {
           member_name: { type: "string" },
-          air: {
-            type: "number",
+          values: {
+            type: "array",
             description:
-              "Air troop composition as a plain decimal value (e.g. 2.5) - NOT a percentage. Do not add a % sign or multiply/divide by 100. Omit if this member didn't report it.",
-          },
-          tank: {
-            type: "number",
-            description: "Tank troop composition as a plain decimal value, not a percentage. Omit if not reported.",
-          },
-          missile: {
-            type: "number",
-            description: "Missile troop composition as a plain decimal value, not a percentage. Omit if not reported.",
-          },
-          fourth: {
-            type: "number",
-            description:
-              "Fourth troop type composition as a plain decimal value, not a percentage. Omit if not reported.",
+              "Every troop-composition number this member reported, as plain decimal values (e.g. 2.5) - NOT percentages, in the exact order they appear in the message.",
+            items: {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  enum: ["air", "tank", "missile", "fourth"],
+                  description:
+                    "Which troop type this number is, ONLY if a letter/label (a/air, t/tank, m/missile, f/fourth/l) was explicitly attached to it in the message. Omit this property entirely if the number had no label.",
+                },
+                value: { type: "number" },
+              },
+              required: ["value"],
+            },
           },
         },
-        required: ["member_name"],
+        required: ["member_name", "values"],
       },
     },
   },
@@ -166,9 +166,9 @@ export function buildExtractionPrompt(category: CategoryForPrompt): string {
   if (category.shape === "free_text") {
     return `${intro}
 
-This is free-text chat/announcement content, not a structured table - members self-report their troop composition in inconsistent shorthand (e.g. "air 2.5 tank 1.8 missile 0.9 fourth 0.3", or abbreviated like "a2.5 t1.8 m0.9 f0.3"), in any order, possibly missing some values. One message is usually one member.
+This is free-text chat/announcement content, not a structured table - members self-report their troop composition in inconsistent shorthand (e.g. "air 2.5 tank 1.8 missile 0.9 fourth 0.3", or abbreviated like "a2.5 t1.8 m0.9 f0.3"), in any order, possibly missing some values, and sometimes with NO letters/labels at all (just raw numbers like "2.5 1.8 0.9 0.3"). One message is usually one member.
 
-Extract each member's reported air/tank/missile/fourth values. These are plain decimal values (e.g. 2.5, 0.25, 10) - NOT percentages. Do not add a % sign, and do not multiply or divide by 100 - report the number exactly as written. If a member's message doesn't mention one of the four, omit that field for them rather than guessing. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — exclude that tag from "member_name", report only the person's display name. If you're not fully confident in a reading, still report your best guess - low confidence is expected here and this data is reviewed by a person before it's used for anything.`;
+Report every numeric value the member gave, in "values", in the exact order they appear in the message - do not reorder or deduplicate them. For each number, set "type" to whichever troop type its label unambiguously names (a/air, t/tank, m/missile, f/fourth/l) ONLY if that number actually had a letter/label attached to it in the source text. If a number has no label at all, omit "type" for it entirely - do NOT guess which troop type an unlabeled number is, that assignment is handled deterministically downstream from the order you report them in. These are plain decimal values (e.g. 2.5, 0.25, 10) - NOT percentages. Do not add a % sign, and do not multiply or divide by 100 - report the number exactly as written. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — exclude that tag from "member_name", report only the person's display name. If you're not fully confident in a reading, still report your best guess - low confidence is expected here and this data is reviewed by a person before it's used for anything.`;
   }
 
   return `${intro}

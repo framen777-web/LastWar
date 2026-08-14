@@ -2,7 +2,34 @@ import { prisma } from "@/lib/db";
 import { ZoomWrapper } from "@/components/ZoomWrapper";
 import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
 import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth/dal";
+import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
+import { LimitSelect } from "@/components/LimitSelect";
+
+const RECORD_COLUMNS: DataTableColumn[] = [
+  { key: "name", header: "Member", filter: "text", width: REPORT_NAME_COL_WIDTH },
+  { key: "newValue", header: "New", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "oldValue", header: "Old", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "increasePct", header: "Increase", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+];
+
+function recordRows(records: RecordRow[]): DataTableRow[] {
+  const newRule = pickNumberFormat(records.map((r) => r.newValue));
+  const oldRule = pickNumberFormat(records.map((r) => r.oldValue));
+  return records.map((r, i) => ({
+    id: i,
+    cells: {
+      name: <span className="font-medium">{r.name}</span>,
+      newValue: formatWithRule(r.newValue, newRule),
+      oldValue: <span className="text-neutral-500">{formatWithRule(r.oldValue, oldRule)}</span>,
+      increasePct: <span className="text-green-700">{r.increasePct}%</span>,
+    },
+    sortValues: { name: r.name, newValue: r.newValue, oldValue: r.oldValue, increasePct: r.increasePct },
+  }));
+}
 
 const NEW_RECORDS_CATEGORIES = [
   { key: "vs", label: "New VS Records", headerClass: "bg-green-300" },
@@ -13,7 +40,7 @@ const NEW_RECORDS_CATEGORIES = [
 
 type RecordRow = { name: string; newValue: number; oldValue: number; increasePct: number };
 
-async function getNewRecords(categoryKey: string, week: number): Promise<RecordRow[]> {
+async function getNewRecords(categoryKey: string, week: number, limit: string): Promise<RecordRow[]> {
   const stats = await prisma.weeklyStat.findMany({
     where: { categoryKey, weekNumber: { lte: week } },
     include: { member: true },
@@ -48,11 +75,7 @@ async function getNewRecords(categoryKey: string, week: number): Promise<RecordR
   }
 
   records.sort((a, b) => b.newValue - a.newValue);
-  return records;
-}
-
-function formatNumber(n: number): string {
-  return Math.round(n).toLocaleString();
+  return applyLimit(records, limit);
 }
 
 function formatShareText(week: number, byCategory: { label: string; records: RecordRow[] }[]): string {
@@ -63,7 +86,7 @@ function formatShareText(week: number, byCategory: { label: string; records: Rec
       lines.push("None");
     } else {
       for (const r of records) {
-        lines.push(`${r.name}: ${formatNumber(r.newValue)} (was ${formatNumber(r.oldValue)}, +${r.increasePct}%)`);
+        lines.push(`${r.name}: ${formatStatNumber(r.newValue)} (was ${formatStatNumber(r.oldValue)}, +${r.increasePct}%)`);
       }
     }
     lines.push("");
@@ -72,6 +95,7 @@ function formatShareText(week: number, byCategory: { label: string; records: Rec
 }
 
 export default async function NewRecordsPage({ searchParams }: PageProps<"/reports/new-records">) {
+  await requireRole(["ADMIN", "LEADER"]);
   const params = await searchParams;
 
   const weeks = await prisma.weeklyStat.findMany({
@@ -85,8 +109,10 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
   const weekParam = Array.isArray(params.week) ? params.week[0] : params.week;
   const selectedWeek = weekParam ? Number(weekParam) : defaultWeek;
 
+  const selectedLimit = parseLimitParam(params.limit, "20");
+
   const newRecordsByCategory = await Promise.all(
-    NEW_RECORDS_CATEGORIES.map((c) => getNewRecords(c.key, selectedWeek))
+    NEW_RECORDS_CATEGORIES.map((c) => getNewRecords(c.key, selectedWeek, selectedLimit))
   );
 
   const shareText = formatShareText(
@@ -120,7 +146,10 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-neutral-900 text-white rounded px-3 py-1">
+
+        <LimitSelect defaultValue={selectedLimit} />
+
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
       </form>
@@ -131,37 +160,22 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
       </div>
 
       <ZoomWrapper contentId="new-records-content">
-        <div className="flex flex-row flex-nowrap items-start gap-4 overflow-x-auto">
+        <div className="flex flex-row flex-nowrap items-start gap-4">
           {NEW_RECORDS_CATEGORIES.map((c, i) => {
             const records = newRecordsByCategory[i];
             return (
-              <div key={c.key} className="border border-neutral-200 rounded overflow-hidden shrink-0 w-[260px]">
+              <div key={c.key} className="border border-neutral-200 rounded overflow-hidden shrink-0">
                 <div className={`${c.headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{c.label}</div>
                 {records.length === 0 ? (
                   <p className="text-neutral-500 text-sm p-2">No new records this week.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-neutral-200 text-left">
-                          <th className="py-0.5 px-3">Member</th>
-                          <th className="py-0.5 px-3">New</th>
-                          <th className="py-0.5 px-3">Old</th>
-                          <th className="py-0.5 px-3">Increase</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {records.map((r) => (
-                          <tr key={r.name} className="border-b border-neutral-100">
-                            <td className="py-0.5 px-3 font-medium whitespace-nowrap">{r.name}</td>
-                            <td className="py-0.5 px-3">{formatNumber(r.newValue)}</td>
-                            <td className="py-0.5 px-3 text-neutral-500">{formatNumber(r.oldValue)}</td>
-                            <td className="py-0.5 px-3 text-green-700">{r.increasePct}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={RECORD_COLUMNS}
+                    rows={recordRows(records)}
+                    defaultSort={{ key: "newValue", direction: "desc" }}
+                    dense
+                    fitContent
+                  />
                 )}
               </div>
             );

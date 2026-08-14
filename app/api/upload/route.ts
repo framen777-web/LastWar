@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { runPipelineForImage } from "@/lib/pipeline/run";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function POST(request: Request) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const formData = await request.formData();
 
   const weekNumber = Number(formData.get("weekNumber"));

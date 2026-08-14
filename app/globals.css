@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+ * Theming: redefines Tailwind's own generated `neutral` palette variables per
+ * [data-theme], which re-skins the whole app's surfaces/text/borders with zero
+ * component edits (everything already uses the bg-neutral-, text-neutral- and
+ * border-neutral- utilities).
+ * Two jobs collide on neutral-900 in the default theme (primary text ink, and primary
+ * button fill via bg-neutral-900) that would break if neutral-900 flips light for a dark
+ * theme, so buttons and raised surfaces use their own decoupled tokens instead:
+ * --color-accent/--color-accent-contrast (buttons) and --color-surface-raised (cards,
+ * header, modals). See lib/theme.ts for the matching swatch-preview colors.
+ */
+@theme {
+  --color-accent: var(--color-neutral-900);
+  --color-accent-contrast: #ffffff;
+  --color-surface-raised: #ffffff;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+[data-theme="midnight"] {
+  --color-neutral-50: #0b111a;
+  --color-neutral-100: #141c28;
+  --color-neutral-200: #232e3e;
+  --color-neutral-300: #2c3849;
+  --color-neutral-400: #3d4a5e;
+  --color-neutral-500: #97a3b6;
+  --color-neutral-600: #aab4c4;
+  --color-neutral-700: #c1c9d6;
+  --color-neutral-800: #d3dae3;
+  --color-neutral-900: #e4e9f0;
+  --color-neutral-950: #f2f5f8;
+  --color-accent: #4c8dff;
+  --color-accent-contrast: #ffffff;
+  --color-surface-raised: #18212f;
+}
+
+[data-theme="forest"] {
+  --color-neutral-50: #131a16;
+  --color-neutral-100: #17201b;
+  --color-neutral-200: #26332c;
+  --color-neutral-300: #303f37;
+  --color-neutral-400: #42544a;
+  --color-neutral-500: #93a398;
+  --color-neutral-600: #a8b6ac;
+  --color-neutral-700: #bdc8c0;
+  --color-neutral-800: #d0d8d3;
+  --color-neutral-900: #dfe7e0;
+  --color-neutral-950: #edf2ee;
+  --color-accent: #5faf7c;
+  --color-accent-contrast: #ffffff;
+  --color-surface-raised: #1c2620;
+}
+
+[data-theme="ember"] {
+  --color-neutral-50: #faf6f0;
+  --color-neutral-100: #f5efe6;
+  --color-neutral-200: #e6dcce;
+  --color-neutral-300: #d8cab5;
+  --color-neutral-400: #bba98d;
+  --color-neutral-500: #6b5d4d;
+  --color-neutral-600: #574b3d;
+  --color-neutral-700: #453b30;
+  --color-neutral-800: #332b23;
+  --color-neutral-900: #221c15;
+  --color-neutral-950: #14100c;
+  --color-accent: #c2611f;
+  --color-accent-contrast: #ffffff;
+  --color-surface-raised: #ffffff;
+}
+
+[data-theme="slate"] {
+  --color-neutral-50: #f4f6f8;
+  --color-neutral-100: #edf0f3;
+  --color-neutral-200: #dfe4ea;
+  --color-neutral-300: #cbd3db;
+  --color-neutral-400: #a7b0ba;
+  --color-neutral-500: #5c6874;
+  --color-neutral-600: #4a5460;
+  --color-neutral-700: #39414c;
+  --color-neutral-800: #262d36;
+  --color-neutral-900: #171c22;
+  --color-neutral-950: #0d1013;
+  --color-accent: #2b6cb0;
+  --color-accent-contrast: #ffffff;
+  --color-surface-raised: #ffffff;
+}
+
+[data-theme="high-contrast"] {
+  --color-neutral-50: #000000;
+  --color-neutral-100: #0a0a0a;
+  --color-neutral-200: #f2f2f2;
+  --color-neutral-300: #f5f5f5;
+  --color-neutral-400: #f7f7f7;
+  --color-neutral-500: #e0e0e0;
+  --color-neutral-600: #ebebeb;
+  --color-neutral-700: #f0f0f0;
+  --color-neutral-800: #f5f5f5;
+  --color-neutral-900: #ffffff;
+  --color-neutral-950: #ffffff;
+  --color-accent: #ffd23f;
+  --color-accent-contrast: #000000;
+  --color-surface-raised: #0a0a0a;
 }

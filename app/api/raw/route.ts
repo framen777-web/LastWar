@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminApi } from "@/lib/auth/dal";
 
 export async function GET(request: Request) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
 

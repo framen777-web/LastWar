@@ -1,0 +1,31 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Deploy: connect this repo in the Render dashboard, "New +" -> "Blueprint", pick this file.
+#
+# No `databases:` block here on purpose - the real Postgres database ("lastwar", Frankfurt)
+# already exists and already holds the migrated production data, so this blueprint must not
+# provision a second, empty one. DATABASE_URL is `sync: false` below - paste the existing
+# database's Internal Database URL into the Render dashboard after the first deploy.
+
+services:
+  - type: web
+    name: alliance-stats-tracker
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm run start
+    envVars:
+      # Set in the Render dashboard after first deploy - the existing "lastwar" database's
+      # Internal Database URL (same region, so use Internal not External here).
+      - key: DATABASE_URL
+        sync: false
+      - key: NODE_ENV
+        value: production
+      # sync: false = set these in the Render dashboard after the first deploy, not stored
+      # in this file (so secrets never end up committed to the repo).
+      - key: AUTH_SECRET
+        sync: false
+      # Optional - the Gemini key can also be set later from the app's own Settings page
+      # instead (see app/settings/SettingsClient.tsx), which stores it in the database.
+      - key: GEMINI_API_KEY
+        sync: false

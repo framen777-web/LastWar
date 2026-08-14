@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/auth/actions";
 
 function BackIcon() {
   return (
@@ -20,13 +21,16 @@ function HomeIcon() {
   );
 }
 
-export function NavHeader() {
+type NavUser = { name: string; role: "ADMIN" | "LEADER" | "MEMBER" } | null;
+
+export function NavHeader({ user }: { user: NavUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const isHome = pathname === "/";
+  const isLoginish = pathname === "/login" || pathname === "/setup-admin";
 
   return (
-    <header className="border-b border-neutral-200 bg-white sticky top-0 z-10">
+    <header className="border-b border-neutral-200 bg-surface-raised sticky top-0 z-10">
       <div className="flex items-center justify-between px-2 py-2 max-w-5xl mx-auto">
         <div className="w-10">
           {!isHome && (
@@ -54,6 +58,18 @@ export function NavHeader() {
           )}
         </div>
       </div>
+      {user && !isLoginish && (
+        <div className="flex items-center justify-between px-3 pb-2 max-w-5xl mx-auto text-xs text-neutral-500">
+          <Link href="/account" className="hover:text-neutral-900 hover:underline">
+            {user.name} · {user.role}
+          </Link>
+          <form action={logout}>
+            <button type="submit" className="text-neutral-500 hover:text-neutral-900 underline">
+              Log out
+            </button>
+          </form>
+        </div>
+      )}
     </header>
   );
 }

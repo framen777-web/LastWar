@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/db";
+import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { MultiCategoryRowActions } from "@/components/MultiCategoryRowActions";
+import { pickNumberFormat, formatWithRule } from "@/lib/format";
+import { requireRole } from "@/lib/auth/dal";
 
 // Import labels are free-text as extracted (e.g. "2026-8-2 20:00:52") - drop a trailing
 // time component for display since only the date distinguishes separate imports here.
@@ -8,6 +12,7 @@ function formatImportLabel(dedupKey: string): string {
 }
 
 export default async function MultiTablePage({ searchParams }: PageProps<"/dashboard/multi">) {
+  const user = await requireRole(["ADMIN", "LEADER"]);
   const params = await searchParams;
 
   const multiCategories = await prisma.category.findMany({
@@ -50,6 +55,46 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
     valueByMemberImport.set(`${r.memberId}:${r.dedupKey}`, r.value);
   }
 
+  const columns: DataTableColumn[] = [
+    ...(user.role === "ADMIN" ? [{ key: "actions", header: "" }] : []),
+    { key: "member", header: "Member", filter: "text" },
+    ...imports.map((dedupKey) => ({ key: dedupKey, header: formatImportLabel(dedupKey), filter: "number" as const })),
+  ];
+
+  const importRules = new Map(
+    imports.map((dedupKey) => [
+      dedupKey,
+      pickNumberFormat(members.map((m) => valueByMemberImport.get(`${m.id}:${dedupKey}`))),
+    ])
+  );
+
+  const rows: DataTableRow[] = members.map((member) => {
+    const cells: Record<string, React.ReactNode> = { member: <span className="font-medium">{member.name}</span> };
+    const sortValues: Record<string, number | string> = { member: member.name };
+    for (const dedupKey of imports) {
+      const value = valueByMemberImport.get(`${member.id}:${dedupKey}`);
+      cells[dedupKey] = <span className="text-neutral-700">{formatWithRule(value, importRules.get(dedupKey)!)}</span>;
+      if (value !== undefined) sortValues[dedupKey] = value;
+    }
+    if (user.role === "ADMIN" && selectedCategory) {
+      cells.actions = (
+        <MultiCategoryRowActions
+          weekNumber={selectedWeek}
+          memberId={member.id}
+          memberName={member.name}
+          categoryKey={selectedCategory.key}
+          categoryName={selectedCategory.name}
+          imports={imports.map((dedupKey) => ({
+            dedupKey,
+            label: formatImportLabel(dedupKey),
+            value: valueByMemberImport.get(`${member.id}:${dedupKey}`) ?? null,
+          }))}
+        />
+      );
+    }
+    return { id: member.id, cells, sortValues };
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Multitable (Multiple Imports)</h1>
@@ -91,7 +136,7 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-neutral-900 text-white rounded px-3 py-1">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
       </form>
@@ -103,32 +148,7 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
           No {selectedCategory.name} imports for week {selectedWeek} yet.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-300 text-left">
-                <th className="py-2 pr-3">Member</th>
-                {imports.map((dedupKey) => (
-                  <th key={dedupKey} className="py-2 pr-3 whitespace-nowrap">
-                    {formatImportLabel(dedupKey)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr key={member.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-3 font-medium whitespace-nowrap">{member.name}</td>
-                  {imports.map((dedupKey) => (
-                    <td key={dedupKey} className="py-2 pr-3 text-neutral-700 whitespace-nowrap">
-                      {valueByMemberImport.get(`${member.id}:${dedupKey}`) ?? "—"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
       )}
     </div>
   );

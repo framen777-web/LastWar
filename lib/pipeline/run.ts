@@ -102,19 +102,10 @@ async function writeExtraction(
     const { members } = extracted as FreeTextResult;
     for (const m of members) {
       const memberId = await matchMember(m.member_name);
-      await prisma.member.update({
-        where: { id: memberId },
-        data: {
-          squadAir: m.air ?? undefined,
-          squadTank: m.tank ?? undefined,
-          squadMissile: m.missile ?? undefined,
-          squadFourth: m.fourth ?? undefined,
-        },
-      });
 
-      // Also keep a dated snapshot of this reading (unlike the generic single-value
-      // categories, there's no one "value" here - the 4 fields are the payload, kept in
-      // `fields` for the Squad Power/Growth report to diff week over week).
+      // Squad Power/Growth reads this from a per-week CategoryRecord snapshot (not a
+      // running Member.squadAir/etc field) so it can diff week over week rather than only
+      // ever seeing the latest reading regardless of which week is selected.
       const fields = { air: m.air, tank: m.tank, missile: m.missile, fourth: m.fourth };
       await prisma.categoryRecord.upsert({
         where: { categoryId_memberId_weekNumber_dedupKey: { categoryId: category.id, memberId, weekNumber, dedupKey: "" } },
@@ -142,9 +133,9 @@ async function writeExtraction(
         data: {
           status: m.status ?? undefined,
           lastActive: m.last_active ?? undefined,
-          ...(m.alliance_rank ? { allianceRank: m.alliance_rank } : {}),
         },
       });
+      if (m.alliance_rank) await recordAllianceRank(memberId, weekNumber, m.alliance_rank);
       await writeCategoryRow(
         category,
         memberId,
@@ -160,7 +151,7 @@ async function writeExtraction(
     const { rows, event_date } = extracted as RankingListResult;
     for (const row of rows) {
       const memberId = await matchMember(row.member_name);
-      if (row.alliance_rank) await updateAllianceRank(memberId, row.alliance_rank);
+      if (row.alliance_rank) await recordAllianceRank(memberId, weekNumber, row.alliance_rank);
       await writeCategoryRow(
         category,
         memberId,
@@ -269,8 +260,28 @@ async function upsertWeeklyStat(
   });
 }
 
-async function updateAllianceRank(memberId: number, allianceRank: string): Promise<void> {
-  await prisma.member.update({ where: { id: memberId }, data: { allianceRank } });
+export const ALLIANCE_RANK_CATEGORY_KEY = "alliance_rank";
+
+// Alliance rank has no dedicated Category row (it's a sub-field of roster/ranking_list
+// screenshots, not its own extractable screenshot type) but still gets tracked per week
+// like any other stat, via this categoryKey with no backing Category - the same pattern
+// this app already uses for Canyon Storm/Zombie Siege (see lib/mvp/data.ts).
+// Member.allianceRank stays as a "current" convenience field, but is only overwritten
+// when this week is now the latest known week of rank history for the member - so a
+// historical backfill (or an out-of-order screenshot) can never regress a newer rank.
+export async function recordAllianceRank(memberId: number, weekNumber: number, allianceRank: string): Promise<void> {
+  const rankNumber = Number(allianceRank.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(rankNumber) || rankNumber <= 0) return;
+
+  await upsertWeeklyStat(memberId, weekNumber, ALLIANCE_RANK_CATEGORY_KEY, rankNumber, undefined);
+
+  const latest = await prisma.weeklyStat.findFirst({
+    where: { memberId, categoryKey: ALLIANCE_RANK_CATEGORY_KEY },
+    orderBy: { weekNumber: "desc" },
+  });
+  if (latest && latest.weekNumber === weekNumber) {
+    await prisma.member.update({ where: { id: memberId }, data: { allianceRank: `R${rankNumber}` } });
+  }
 }
 
 // Applies a pending_confirmation (Tier B) RawExtraction once a person has reviewed it -

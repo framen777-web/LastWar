@@ -1,5 +1,6 @@
 import { generateJson } from "./gemini";
 import { buildExtractionPrompt, getExtractionSchema, type CategoryForPrompt } from "./prompts";
+import { resolveSquadMember, type RawSquadValue } from "./resolveSquadValues";
 
 export type RankingRow = {
   rank: number;
@@ -27,8 +28,11 @@ export type FreeTextResult = {
     tank?: number;
     missile?: number;
     fourth?: number;
+    needsReview: boolean;
   }>;
 };
+
+type RawFreeTextResult = { members: Array<{ member_name: string; values: RawSquadValue[] }> };
 
 export async function extract(
   category: CategoryForPrompt,
@@ -42,5 +46,12 @@ export async function extract(
     schema: getExtractionSchema(category.shape),
   });
 
-  return result as RankingListResult | RosterResult | FreeTextResult;
+  if (category.shape === "free_text") {
+    const raw = result as RawFreeTextResult;
+    return {
+      members: (raw.members ?? []).map((m) => resolveSquadMember(m.member_name, m.values ?? [])),
+    };
+  }
+
+  return result as RankingListResult | RosterResult;
 }

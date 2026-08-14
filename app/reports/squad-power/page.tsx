@@ -2,7 +2,54 @@ import { prisma } from "@/lib/db";
 import { ZoomWrapper } from "@/components/ZoomWrapper";
 import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
 import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { requireRole } from "@/lib/auth/dal";
+import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
+import { LimitSelect } from "@/components/LimitSelect";
+
+const SQUAD_POWER_COLUMNS: DataTableColumn[] = [
+  { key: "name", header: "Commander", filter: "text", width: REPORT_NAME_COL_WIDTH },
+  { key: "thisSum", header: "3 Squad power", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "thisTop", header: "Top Squad", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "priorSum", header: "3 Squad power (last)", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "priorTop", header: "Top Squad (last)", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "growth", header: "Growth", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+  { key: "squadType", header: "Squad Type", filter: "text", width: REPORT_VALUE_COL_WIDTH },
+];
+
+function squadPowerRows(rows: Row[]): DataTableRow[] {
+  const thisSumRule = pickNumberFormat(rows.map((r) => r.thisStats.threeSum));
+  const thisTopRule = pickNumberFormat(rows.map((r) => r.thisStats.topValue));
+  const priorSumRule = pickNumberFormat(rows.map((r) => r.priorStats.threeSum));
+  const priorTopRule = pickNumberFormat(rows.map((r) => r.priorStats.topValue));
+  return rows.map((r, i) => {
+    const cells: Record<string, React.ReactNode> = {
+      name: <span className="font-medium">{r.name}</span>,
+      thisSum: formatWithRule(r.thisStats.threeSum, thisSumRule),
+      thisTop: formatWithRule(r.thisStats.topValue, thisTopRule),
+      priorSum: <span className="text-neutral-500">{formatWithRule(r.priorStats.threeSum, priorSumRule)}</span>,
+      priorTop: <span className="text-neutral-500">{formatWithRule(r.priorStats.topValue, priorTopRule)}</span>,
+      growth: (
+        <span className={r.growth !== null && r.growth < 0 ? "text-red-600" : "text-green-700"}>
+          {r.growth === null ? "—" : `${r.growth.toFixed(2)}%`}
+        </span>
+      ),
+      squadType: r.squadType ?? "—",
+    };
+    const sortValues: Record<string, number | string> = {
+      name: r.name,
+      thisSum: r.thisStats.threeSum,
+      thisTop: r.thisStats.topValue,
+      priorSum: r.priorStats.threeSum,
+      priorTop: r.priorStats.topValue,
+      squadType: r.squadType ?? "",
+    };
+    if (r.growth !== null) sortValues.growth = r.growth;
+    return { id: i, cells, sortValues };
+  });
+}
 
 type SquadFields = { air?: number | null; tank?: number | null; missile?: number | null; fourth?: number | null };
 type SquadStats = { topValue: number; topType: string | null; threeSum: number };
@@ -22,10 +69,6 @@ function computeSquadStats(fields: SquadFields | null): SquadStats {
   return { topValue, topType, threeSum };
 }
 
-function formatValue(n: number): string {
-  return n.toFixed(1);
-}
-
 type Row = {
   name: string;
   thisStats: SquadStats;
@@ -34,7 +77,7 @@ type Row = {
   squadType: string | null;
 };
 
-async function getSquadPowerReport(week: number): Promise<{ rows: Row[]; priorWeek: number | null }> {
+async function getSquadPowerReport(week: number, limit: string): Promise<{ rows: Row[]; priorWeek: number | null }> {
   const category = await prisma.category.findUnique({ where: { key: "squads" } });
   if (!category) return { rows: [], priorWeek: null };
 
@@ -80,7 +123,7 @@ async function getSquadPowerReport(week: number): Promise<{ rows: Row[]; priorWe
 
   rows.sort((a, b) => b.priorStats.threeSum - a.priorStats.threeSum);
 
-  return { rows, priorWeek };
+  return { rows: applyLimit(rows, limit), priorWeek };
 }
 
 function formatShareText(week: number, rows: Row[]): string {
@@ -91,7 +134,7 @@ function formatShareText(week: number, rows: Row[]): string {
     for (const r of rows) {
       const growth = r.growth === null ? "—" : `${r.growth.toFixed(2)}%`;
       lines.push(
-        `${r.name}: ${formatValue(r.thisStats.threeSum)} (Top: ${r.squadType ?? "—"} ${formatValue(r.thisStats.topValue)}) Growth: ${growth}`
+        `${r.name}: ${formatStatNumber(r.thisStats.threeSum)} (Top: ${r.squadType ?? "—"} ${formatStatNumber(r.thisStats.topValue)}) Growth: ${growth}`
       );
     }
   }
@@ -99,6 +142,7 @@ function formatShareText(week: number, rows: Row[]): string {
 }
 
 export default async function SquadPowerPage({ searchParams }: PageProps<"/reports/squad-power">) {
+  await requireRole(["ADMIN", "LEADER"]);
   const params = await searchParams;
 
   const weeks = await prisma.categoryRecord.findMany({
@@ -113,7 +157,9 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
   const weekParam = Array.isArray(params.week) ? params.week[0] : params.week;
   const selectedWeek = weekParam ? Number(weekParam) : defaultWeek;
 
-  const { rows, priorWeek } = await getSquadPowerReport(selectedWeek);
+  const selectedLimit = parseLimitParam(params.limit, "all");
+
+  const { rows, priorWeek } = await getSquadPowerReport(selectedWeek, selectedLimit);
 
   const shareText = formatShareText(selectedWeek, rows);
   const shareUrl = await getWhatsappShareUrl(shareText);
@@ -144,7 +190,10 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-neutral-900 text-white rounded px-3 py-1">
+
+        <LimitSelect defaultValue={selectedLimit} />
+
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
       </form>
@@ -158,50 +207,7 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
         {rows.length === 0 ? (
           <p className="text-neutral-500 text-sm">No squad data for week {selectedWeek} yet.</p>
         ) : (
-          <div className="overflow-x-auto border border-neutral-200 rounded">
-            <table className="text-sm border-collapse w-max">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left">
-                  <th rowSpan={2} className="py-0.5 px-3 align-bottom">
-                    Commander
-                  </th>
-                  <th colSpan={2} className="py-0.5 px-3 text-center border-b border-neutral-200">
-                    This Week
-                  </th>
-                  <th colSpan={2} className="py-0.5 px-3 text-center border-b border-neutral-200">
-                    Last Week
-                  </th>
-                  <th rowSpan={2} className="py-0.5 px-3 align-bottom">
-                    Growth
-                  </th>
-                  <th rowSpan={2} className="py-0.5 px-3 align-bottom whitespace-nowrap">
-                    Squad Type
-                  </th>
-                </tr>
-                <tr className="border-b border-neutral-200 text-left">
-                  <th className="py-0.5 px-3 whitespace-nowrap">3 Squad power</th>
-                  <th className="py-0.5 px-3 whitespace-nowrap">Top Squad</th>
-                  <th className="py-0.5 px-3 whitespace-nowrap">3 Squad power</th>
-                  <th className="py-0.5 px-3 whitespace-nowrap">Top Squad</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.name} className="border-b border-neutral-100">
-                    <td className="py-0.5 px-3 font-medium whitespace-nowrap">{r.name}</td>
-                    <td className="py-0.5 px-3">{formatValue(r.thisStats.threeSum)}</td>
-                    <td className="py-0.5 px-3">{formatValue(r.thisStats.topValue)}</td>
-                    <td className="py-0.5 px-3 text-neutral-500">{formatValue(r.priorStats.threeSum)}</td>
-                    <td className="py-0.5 px-3 text-neutral-500">{formatValue(r.priorStats.topValue)}</td>
-                    <td className={`py-0.5 px-3 ${r.growth !== null && r.growth < 0 ? "text-red-600" : "text-green-700"}`}>
-                      {r.growth === null ? "—" : `${r.growth.toFixed(2)}%`}
-                    </td>
-                    <td className="py-0.5 px-3 whitespace-nowrap">{r.squadType ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable columns={SQUAD_POWER_COLUMNS} rows={squadPowerRows(rows)} defaultSort={{ key: "thisSum", direction: "desc" }} dense fitContent />
         )}
       </ZoomWrapper>
     </div>

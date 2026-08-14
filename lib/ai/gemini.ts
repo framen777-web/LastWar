@@ -1,8 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-
-const apiKey = process.env.GEMINI_API_KEY;
-
-export const genai = new GoogleGenAI({ apiKey });
+import { getGeminiApiKey } from "@/lib/settings";
 
 export const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
@@ -12,6 +9,11 @@ export async function generateJson(params: {
   mimeType: string;
   schema: unknown;
 }): Promise<unknown> {
+  // Built per call (not a module-level singleton) so a key saved via Setup -> Settings
+  // takes effect immediately, without needing an env var + redeploy.
+  const apiKey = await getGeminiApiKey();
+  const genai = new GoogleGenAI({ apiKey });
+
   const response = await genai.models.generateContent({
     model: MODEL,
     contents: [

@@ -1,10 +1,4 @@
-import { PrismaClient } from "../lib/generated/prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL ?? "file:./dev.db",
-});
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../lib/db";
 
 const RANKING_LIST_FIELDS = ["rank", "member_name", "value", "alliance_rank"];
 const RANKING_LIST_FIELDS_WITH_DATE = [...RANKING_LIST_FIELDS, "event_date"];
