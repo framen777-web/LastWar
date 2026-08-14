@@ -24,6 +24,6 @@ export async function matchMember(rawName: string): Promise<number> {
       const existing = await prisma.member.findUnique({ where: { name } });
       if (existing) return existing.id;
     }
-    throw err;
+    throw new Error(`Failed to match or create member "${name}": ${err instanceof Error ? err.message : String(err)}`);
   }
 }

@@ -17,15 +17,20 @@ export async function classify(imageBase64: string, mimeType: string): Promise<C
     return { categoryKey: "unknown", confidence: 0 };
   }
 
-  const raw = (await generateJson({
+  const raw = await generateJson({
     prompt: buildClassifyPrompt(categories),
     imageBase64,
     mimeType,
     schema: buildClassifySchema(categories),
-  })) as { category_key?: string; confidence?: number };
+  });
+
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error(`Gemini returned a non-object classification response: ${JSON.stringify(raw)}`);
+  }
+  const { category_key, confidence } = raw as { category_key?: unknown; confidence?: unknown };
 
   return {
-    categoryKey: raw.category_key ?? "unknown",
-    confidence: typeof raw.confidence === "number" ? raw.confidence : 0,
+    categoryKey: typeof category_key === "string" ? category_key : "unknown",
+    confidence: typeof confidence === "number" ? confidence : 0,
   };
 }

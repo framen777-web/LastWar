@@ -25,6 +25,9 @@ const STATUS_LABELS: Record<PipelineResult["status"], string> = {
   error: "error",
 };
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 export function UploadClient() {
   const [knownWeeks, setKnownWeeks] = useState<number[]>([]);
   const [weekNumber, setWeekNumber] = useState<number>(1);
@@ -36,12 +39,17 @@ export function UploadClient() {
 
   useEffect(() => {
     fetch("/api/weeks")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load weeks (HTTP ${res.status})`);
+        return res.json();
+      })
       .then((data: { weeks: number[]; defaultWeek: number }) => {
         setKnownWeeks(data.weeks);
         setWeekNumber(data.defaultWeek);
       })
-      .catch(() => {});
+      .catch((err) => {
+        setError(`Could not load known week numbers: ${err instanceof Error ? err.message : String(err)}`);
+      });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,30 +62,37 @@ export function UploadClient() {
 
     // Processed one file per request (not one batch request) so the button can show
     // real "file X of N" progress instead of a single opaque "Processing…" for the
-    // whole upload - each file already runs independently server-side.
+    // whole upload - each file already runs independently server-side. A failure on
+    // one file doesn't stop the rest - they're independent requests, so partial success
+    // is the normal case, not an error condition to abort on.
     const collected: PipelineResult[] = [];
+    const failed: { filename: string; reason: string }[] = [];
     try {
       for (let i = 0; i < files.length; i++) {
         setProgress({ current: i + 1, total: files.length });
         const file = files[i];
 
-        const formData = new FormData();
-        formData.set("weekNumber", String(weekNumber));
-        formData.append("files", file);
+        try {
+          const formData = new FormData();
+          formData.set("weekNumber", String(weekNumber));
+          formData.append("files", file);
 
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
+          const res = await fetch("/api/upload", { method: "POST", body: formData });
+          const data = await res.json();
 
-        if (!res.ok) {
-          setError(data.error ?? `Upload failed on ${file.name}`);
-          break;
+          if (!res.ok) {
+            failed.push({ filename: file.name, reason: data.error ?? `HTTP ${res.status}` });
+            continue;
+          }
+          collected.push(...data.results);
+        } catch (err) {
+          failed.push({ filename: file.name, reason: err instanceof Error ? err.message : String(err) });
         }
-        collected.push(...data.results);
       }
       setResults(collected.length > 0 ? collected : null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setResults(collected.length > 0 ? collected : null);
+      if (failed.length > 0) {
+        setError(`${failed.length} of ${files.length} file(s) failed:\n${failed.map((f) => `${f.filename}: ${f.reason}`).join("\n")}`);
+      }
     } finally {
       setSubmitting(false);
       setProgress(null);
@@ -119,9 +134,23 @@ export function UploadClient() {
             accept="image/*"
             multiple
             onChange={(e) => {
-              setFiles(Array.from(e.target.files ?? []));
+              const selected = Array.from(e.target.files ?? []);
+              const valid: File[] = [];
+              const rejections: string[] = [];
+
+              for (const file of selected) {
+                if (file.size > MAX_FILE_SIZE) {
+                  rejections.push(`${file.name}: ${Math.round(file.size / 1024 / 1024)}MB exceeds the 10MB limit`);
+                } else if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+                  rejections.push(`${file.name}: unsupported type "${file.type || "unknown"}" (use JPEG, PNG, or WebP)`);
+                } else {
+                  valid.push(file);
+                }
+              }
+
+              setFiles(valid);
               setResults(null);
-              setError(null);
+              setError(rejections.length > 0 ? rejections.join("\n") : null);
             }}
             className="border border-neutral-300 rounded px-3 py-2"
           />
@@ -146,7 +175,7 @@ export function UploadClient() {
         </div>
       </form>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-600 text-sm whitespace-pre-line">{error}</p>}
 
       {results && (
         <div className="flex flex-col gap-2">
