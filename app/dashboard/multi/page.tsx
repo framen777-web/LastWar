@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { MobileCardList } from "@/components/MobileCardList";
 import { MultiCategoryRowActions } from "@/components/MultiCategoryRowActions";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireRole } from "@/lib/auth/dal";
@@ -148,7 +149,14 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
           No {selectedCategory.name} imports for week {selectedWeek} yet.
         </p>
       ) : (
-        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
+        <>
+          <div className="hidden md:block">
+            <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
+          </div>
+          <div className="md:hidden">
+            <MobileCardList columns={columns} rows={rows} titleKey="member" actionsKey="actions" />
+          </div>
+        </>
       )}
     </div>
   );

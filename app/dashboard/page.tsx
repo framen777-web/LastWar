@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { DeleteWeekButton } from "@/components/DeleteWeekButton";
 import { MemberWeekActions } from "@/components/MemberWeekActions";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { MobileCardList } from "@/components/MobileCardList";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireRole } from "@/lib/auth/dal";
 
@@ -190,7 +191,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {members.length === 0 ? (
         <p className="text-neutral-500 text-sm">No data for week {selectedWeek} yet.</p>
       ) : (
-        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
+        <>
+          <div className="hidden md:block">
+            <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
+          </div>
+          <div className="md:hidden">
+            <MobileCardList columns={columns} rows={rows} titleKey="member" actionsKey="actions" />
+          </div>
+        </>
       )}
     </div>
   );
