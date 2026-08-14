@@ -17,9 +17,7 @@ implements a first slice of.
 5. `npm run dev`, then open [http://localhost:3000](http://localhost:3000)
 
 Deploying: see `render.yaml` (Render Blueprint - web service + managed
-Postgres). Migrating existing data from an old local SQLite `dev.db` into a
-fresh Postgres database: `npx tsx scripts/migrate-to-postgres.ts` (one-time,
-see the comment at the top of that file).
+Postgres).
 
 ## Pages
 
