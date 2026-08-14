@@ -92,6 +92,14 @@ export function ShareScreenshotToWhatsApp({
     if (!el) return;
 
     setBusy(true);
+    // ZoomWrapper's on-screen auto-fit preview uses the non-standard CSS `zoom` property,
+    // which html2canvas doesn't account for - it sizes the capture canvas from the zoomed
+    // (small) bounding box but paints content at its un-zoomed layout position, so anything
+    // zoomed below 100% (routine on a narrow phone, where auto-fit has to shrink a wide
+    // report a lot) gets its text painted outside the canvas entirely. Force 100% just for
+    // the capture, then restore whatever the on-screen preview had.
+    const prevZoom = el.style.zoom;
+    el.style.zoom = "100%";
     try {
       const canvas = await html2canvas(el, {
         backgroundColor: "#ffffff",
@@ -117,6 +125,7 @@ export function ShareScreenshotToWhatsApp({
         alert("Your browser can't share files directly - the image was downloaded instead. Attach it to WhatsApp manually.");
       }
     } finally {
+      el.style.zoom = prevZoom;
       setBusy(false);
     }
   }
