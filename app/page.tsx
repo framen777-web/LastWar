@@ -8,18 +8,18 @@ export default async function Home() {
     return (
       <div className="flex flex-col gap-3 max-w-sm mx-auto">
         <MenuButton href="/dashboard" label="My Stats" description="Your stats for a given week" />
-        <MenuButton href="/dashboards" label="Dashboards" description="Your growth over time" />
+        <MenuButton href="/dashboards" label="Reports" description="Your growth over time" />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3 max-w-sm mx-auto">
-      <MenuButton href="/new-information" label="New Information" description="Import screenshots and view stats" />
-      <MenuButton href="/reports" label="Weekly Reports" description="Records, leaderboards and growth for a given week" />
-      <MenuButton href="/dashboards" label="Dashboards" description="Alliance reports and per-member growth" />
+      <MenuButton href="/new-information" label="Uploads" description="Import screenshots and view stats" />
+      <MenuButton href="/reports" label="End of week reports" description="Records, leaderboards and growth for a given week" />
       <MenuButton href="/conductor" label="Conductor" description="Standings, rotation selection, and history" />
-      {user.role === "ADMIN" && <MenuButton href="/setup" label="Setup" description="Categories and configuration" />}
+      <MenuButton href="/dashboards" label="Reports" description="Alliance reports and per-member growth" />
+      {user.role === "ADMIN" && <MenuButton href="/setup" label="Settings" description="Categories and configuration" />}
     </div>
   );
 }
