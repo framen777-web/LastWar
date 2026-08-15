@@ -5,7 +5,7 @@ import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsAp
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -142,7 +142,7 @@ function formatShareText(week: number, rows: Row[]): string {
 }
 
 export default async function SquadPowerPage({ searchParams }: PageProps<"/reports/squad-power">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-squads");
   const params = await searchParams;
 
   const weeks = await prisma.categoryRecord.findMany({

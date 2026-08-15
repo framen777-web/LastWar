@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { SettingsClient } from "./SettingsClient";
 
 export default async function SettingsPage() {
-  await requireAdmin();
+  await requireMenuAccess("settings-general");
   return <SettingsClient />;
 }

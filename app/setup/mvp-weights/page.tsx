@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { MvpWeightsClient } from "./MvpWeightsClient";
 
 export default async function MvpWeightsPage() {
-  await requireAdmin();
+  await requireMenuAccess("settings-mvp-weighting");
   return <MvpWeightsClient />;
 }

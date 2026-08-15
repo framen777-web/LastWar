@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MobileCardList } from "@/components/MobileCardList";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getMemberGrowthData } from "@/lib/dashboards/individualGrowth";
 
 export default async function IndividualDashboardPage({ searchParams }: PageProps<"/dashboards/individual">) {
-  const user = await requireRole(["ADMIN", "LEADER", "MEMBER"]);
+  const user = await requireMenuAccess("dashboards-individual");
   const params = await searchParams;
 
   // Mirrors /dashboard's ownScope pattern: MEMBER can never view anyone but themselves, even

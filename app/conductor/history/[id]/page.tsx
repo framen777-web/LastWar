@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getRoundSlots } from "@/lib/conductor/selection";
 import { formatAnnouncementText } from "@/lib/conductor/report";
 import { CopyTextButton } from "@/components/CopyTextButton";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 const WEEKDAY_LABELS: Record<string, string> = {
   monday: "Monday",
@@ -15,7 +15,7 @@ const WEEKDAY_LABELS: Record<string, string> = {
 };
 
 export default async function ConductorHistoryDetailPage({ params }: PageProps<"/conductor/history/[id]">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("conductor-history");
   const { id } = await params;
 
   const result = await getRoundSlots(Number(id));

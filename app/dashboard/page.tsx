@@ -3,10 +3,10 @@ import { DeleteWeekButton } from "@/components/DeleteWeekButton";
 import { MemberWeekActions } from "@/components/MemberWeekActions";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
-  const user = await requireRole(["ADMIN", "LEADER", "MEMBER"]);
+  const user = await requireMenuAccess(["home-my-stats", "uploads-review"]);
   const ownScope = user.role === "MEMBER" ? { memberId: user.id } : {};
 
   const params = await searchParams;

@@ -1,7 +1,7 @@
 import { computeStandings } from "@/lib/conductor/points";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MenuButton } from "@/components/MenuButton";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess, getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
 
 const COLUMNS: DataTableColumn[] = [
   { key: "member", header: "Member", filter: "text" },
@@ -11,7 +11,9 @@ const COLUMNS: DataTableColumn[] = [
 ];
 
 export default async function ConductorPage() {
-  await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireMenuAccess("home-conductor");
+  const access = await getMenuAccessMap();
+  const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 
   const standings = await computeStandings();
 
@@ -31,8 +33,10 @@ export default async function ConductorPage() {
       <h1 className="text-xl font-semibold">Conductor</h1>
 
       <div className="flex flex-col gap-3 max-w-sm">
-        <MenuButton href="/conductor/select" label="Select Conductors & Passengers" description="Generate and confirm the next rotation" />
-        <MenuButton href="/conductor/history" label="History" description="Past confirmed rotations" />
+        {visible("conductor-select") && (
+          <MenuButton href="/conductor/select" label="Select Conductors & Passengers" description="Generate and confirm the next rotation" />
+        )}
+        {visible("conductor-history") && <MenuButton href="/conductor/history" label="History" description="Past confirmed rotations" />}
       </div>
 
       <h2 className="text-lg font-semibold">Standings</h2>

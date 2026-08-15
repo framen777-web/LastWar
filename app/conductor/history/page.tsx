@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function ConductorHistoryPage() {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("conductor-history");
 
   const rounds = await prisma.conductorRound.findMany({
     where: { status: "confirmed" },

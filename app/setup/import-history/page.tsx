@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { ImportHistoryClient } from "./ImportHistoryClient";
 
 export default async function ImportHistoryPage() {
-  await requireAdmin();
+  await requireMenuAccess("settings-import-history");
   return <ImportHistoryClient />;
 }

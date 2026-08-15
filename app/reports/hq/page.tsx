@@ -5,7 +5,7 @@ import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsAp
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -118,7 +118,7 @@ function formatShareText(week: number, levelUps: LevelUpRow[], distribution: Dis
 }
 
 export default async function HqLevelsPage({ searchParams }: PageProps<"/reports/hq">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-hq");
   const params = await searchParams;
 
   const weeks = await prisma.weeklyStat.findMany({

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getAllianceDetailData, type DetailRow, type SummaryRow } from "@/lib/dashboards/allianceDetail";
@@ -9,7 +9,7 @@ function firstParam(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function AllianceDetailReportPage({ searchParams }: PageProps<"/dashboards/alliance/detail">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("alliance-detail-report");
   const params = await searchParams;
 
   const weeks = await prisma.weeklyStat.findMany({

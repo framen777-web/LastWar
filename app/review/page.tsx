@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { ReviewClient } from "./ReviewClient";
 
 export default async function ReviewPage() {
-  await requireAdmin();
+  await requireMenuAccess("uploads-flagged-errors");
   return <ReviewClient />;
 }

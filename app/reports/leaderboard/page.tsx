@@ -5,7 +5,7 @@ import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsAp
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -178,7 +178,7 @@ function formatShareText(
 }
 
 export default async function LeaderboardPage({ searchParams }: PageProps<"/reports/leaderboard">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-leaderboard");
   const params = await searchParams;
 
   const categoryParam = Array.isArray(params.category) ? params.category[0] : params.category;

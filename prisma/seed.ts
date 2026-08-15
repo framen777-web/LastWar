@@ -130,6 +130,8 @@ const MENU_ITEMS = [
   { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"] },
   { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"] },
   { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"] },
+  { key: "conductor-select", label: "Select Conductors & Passengers", href: "/conductor/select", roles: ["ADMIN", "LEADER"] },
+  { key: "conductor-history", label: "History", href: "/conductor/history", roles: ["ADMIN", "LEADER"] },
   { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"] },
   { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"] },
 

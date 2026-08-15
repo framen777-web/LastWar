@@ -5,7 +5,7 @@ import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsAp
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getWhatsappShareUrl } from "@/lib/whatsapp";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -95,7 +95,7 @@ function formatShareText(week: number, byCategory: { label: string; records: Rec
 }
 
 export default async function NewRecordsPage({ searchParams }: PageProps<"/reports/new-records">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-new-records");
   const params = await searchParams;
 
   const weeks = await prisma.weeklyStat.findMany({

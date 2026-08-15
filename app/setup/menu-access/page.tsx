@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { MenuAccessClient } from "./MenuAccessClient";
 
 export default async function MenuAccessPage() {
-  await requireAdmin();
+  await requireMenuAccess("settings-menu-access");
   return <MenuAccessClient />;
 }

@@ -3,7 +3,7 @@ import { ZoomWrapper } from "@/components/ZoomWrapper";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH } from "@/lib/reportLayout";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 type ClubRow = { name: string; value: number; week: number };
 
@@ -51,7 +51,7 @@ function rowsFor(rows: ClubRow[]): DataTableRow[] {
 }
 
 export default async function ClubsPage() {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-clubs");
 
   const bestByMember = await getBestVsByMember();
   const byTier = CLUB_TIERS.map((tier) => ({

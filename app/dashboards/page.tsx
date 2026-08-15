@@ -1,9 +1,8 @@
 import { MenuButton } from "@/components/MenuButton";
-import { requireRole } from "@/lib/auth/dal";
-import { getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
+import { getMenuAccessMap, canSeeMenuItem, requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function DashboardsHubPage() {
-  const user = await requireRole(["ADMIN", "LEADER", "MEMBER"]);
+  const user = await requireMenuAccess("home-dashboards");
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 

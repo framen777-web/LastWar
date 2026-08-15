@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/db";
 import { getConductorSettings } from "@/lib/conductor/settings";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { SelectClient } from "./SelectClient";
 
 export default async function ConductorSelectPage() {
-  const user = await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireMenuAccess("conductor-select");
   const isAdmin = user.role === "ADMIN";
 
   const settings = await getConductorSettings();

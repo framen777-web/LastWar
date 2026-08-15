@@ -4,7 +4,7 @@ import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp, type ScoredRow } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH } from "@/lib/reportLayout";
 
 const LIMIT_OPTIONS = [10, 20, 50] as const;
@@ -16,7 +16,7 @@ function fmtPct(n: number | null): { text: string; negative: boolean } {
 }
 
 export default async function MvpReportPage({ searchParams }: PageProps<"/reports/mvp">) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("reports-mvp");
   const params = await searchParams;
 
   const rows = await getMemberWeekRows();

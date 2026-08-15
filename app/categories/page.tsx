@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { CategoriesClient } from "./CategoriesClient";
 
 export default async function CategoriesPage() {
-  await requireAdmin();
+  await requireMenuAccess("settings-categories");
   return <CategoriesClient />;
 }

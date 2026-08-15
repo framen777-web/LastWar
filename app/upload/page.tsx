@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { UploadClient } from "./UploadClient";
 
 export default async function UploadPage() {
-  await requireAdmin();
+  await requireMenuAccess("uploads-image-uploads");
   return <UploadClient />;
 }

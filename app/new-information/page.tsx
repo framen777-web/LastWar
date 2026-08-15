@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/db";
 import { MenuButton } from "@/components/MenuButton";
-import { requireRole } from "@/lib/auth/dal";
-import { getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
+import { getMenuAccessMap, canSeeMenuItem, requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function NewInformationPage() {
-  const user = await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireMenuAccess("home-uploads");
   const pendingCount = user.role === "ADMIN" ? await prisma.rawExtraction.count({ where: { status: "pending_confirmation" } }) : 0;
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);

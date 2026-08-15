@@ -1,9 +1,8 @@
 import { MenuButton } from "@/components/MenuButton";
-import { requireAdmin } from "@/lib/auth/dal";
-import { getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
+import { getMenuAccessMap, canSeeMenuItem, requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function SetupPage() {
-  const user = await requireAdmin();
+  const user = await requireMenuAccess("home-settings");
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 

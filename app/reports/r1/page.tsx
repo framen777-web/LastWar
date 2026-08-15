@@ -5,7 +5,7 @@ import { DataTable, type DataTableColumn, type DataTableRow } from "@/components
 import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp, type ScoredRow } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -51,7 +51,7 @@ function Delta({ from, to, decimals }: { from: number | null; to: number | null;
 }
 
 export default async function R1ReportPage({ searchParams }: PageProps<"/reports/r1">) {
-  const user = await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireMenuAccess("reports-r1");
   const isAdmin = user.role === "ADMIN";
   const params = await searchParams;
 

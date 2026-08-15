@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MultiCategoryRowActions } from "@/components/MultiCategoryRowActions";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 // Import labels are free-text as extracted (e.g. "2026-8-2 20:00:52") - drop a trailing
 // time component for display since only the date distinguishes separate imports here.
@@ -12,7 +12,7 @@ function formatImportLabel(dedupKey: string): string {
 }
 
 export default async function MultiTablePage({ searchParams }: PageProps<"/dashboard/multi">) {
-  const user = await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireMenuAccess("uploads-multi-event-review");
   const params = await searchParams;
 
   const multiCategories = await prisma.category.findMany({

@@ -1,7 +1,7 @@
-import { requireRole } from "@/lib/auth/dal";
+import { requireMenuAccess } from "@/lib/menuAccess";
 
 export default async function AllianceGraphsPage() {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireMenuAccess("alliance-graphs");
 
   return (
     <div className="flex flex-col gap-4">
