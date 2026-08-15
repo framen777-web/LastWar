@@ -14,7 +14,9 @@ export default async function DashboardsHubPage() {
           label="Individual Dashboard"
           description={user.role === "MEMBER" ? "Your growth across weeks" : "Any member's growth across weeks"}
         />
-        {/* Alliance Reports section cleared for now - to be redone with something simpler. */}
+        {(user.role === "ADMIN" || user.role === "LEADER") && (
+          <MenuButton href="/dashboards/alliance" label="Alliance Reports" description="Detail report and graphs across a week range" />
+        )}
       </div>
     </div>
   );
