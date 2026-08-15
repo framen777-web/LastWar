@@ -124,7 +124,7 @@ const CATEGORIES = [
 // added to any hub page must get an entry here too, or it's invisible to everyone
 // (fail-closed). Keep this list in sync with the actual JSX across app/page.tsx,
 // app/new-information/page.tsx, app/reports/page.tsx, app/setup/page.tsx,
-// app/dashboards/page.tsx, and app/dashboards/alliance/page.tsx.
+// app/setup/users/page.tsx, app/dashboards/page.tsx, and app/dashboards/alliance/page.tsx.
 const MENU_ITEMS = [
   { key: "home-my-stats", label: "My Stats", href: "/dashboard", roles: ["MEMBER"] },
   { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"] },
@@ -156,6 +156,9 @@ const MENU_ITEMS = [
 
   { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"] },
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"] },
+  { key: "users-list", label: "Users", href: "/setup/users/list", roles: ["ADMIN"] },
+  { key: "users-merge", label: "Merge", href: "/setup/users/merge", roles: ["ADMIN"] },
+  { key: "users-menu-access", label: "Menu Access", href: "/setup/users/menu-access", roles: ["ADMIN"] },
   { key: "settings-categories", label: "Categories", href: "/categories", roles: ["ADMIN"] },
   { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"] },
   { key: "settings-conductor", label: "Conductor Settings", href: "/setup/conductor", roles: ["ADMIN"] },
@@ -166,7 +169,6 @@ const MENU_ITEMS = [
     href: "/setup/import-conductor-history",
     roles: ["ADMIN"],
   },
-  { key: "settings-menu-access", label: "Menu Access", href: "/setup/menu-access", roles: ["ADMIN"] },
 ];
 
 async function main() {

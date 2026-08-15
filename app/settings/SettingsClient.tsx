@@ -8,9 +8,11 @@ export function SettingsClient() {
   const [week1StartDate, setWeek1StartDate] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [geminiApiKeySet, setGeminiApiKeySet] = useState(false);
+  const [generalPassword, setGeneralPassword] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -20,6 +22,7 @@ export function SettingsClient() {
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
         setWeek1StartDate(data.settings?.week1StartDate ?? "");
         setGeminiApiKeySet(!!data.geminiApiKeySet);
+        setGeneralPassword(data.settings?.generalPassword ?? "");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -28,10 +31,20 @@ export function SettingsClient() {
     e.preventDefault();
     setSaving(true);
     setSaved(false);
+    setError(null);
+
+    const minLength = Math.max(1, Number(minPasswordLength) || 8);
+    if (generalPassword && generalPassword.length < minLength) {
+      setError(`General password must be at least ${minLength} characters.`);
+      setSaving(false);
+      return;
+    }
+
     const body: Record<string, string> = {
       whatsappNumber: whatsappNumber.replace(/[^0-9]/g, ""),
-      minPasswordLength: String(Math.max(1, Number(minPasswordLength) || 8)),
+      minPasswordLength: String(minLength),
       week1StartDate,
+      generalPassword,
     };
     // Blank means "leave the saved key alone" - only send it when the admin typed a new one.
     if (geminiApiKey) body.geminiApiKey = geminiApiKey;
@@ -135,11 +148,36 @@ export function SettingsClient() {
           </p>
         </div>
 
+        <div className="flex flex-col gap-1">
+          <label htmlFor="generalPassword" className="text-sm font-medium">
+            General password
+          </label>
+          <input
+            id="generalPassword"
+            type="text"
+            value={generalPassword}
+            onChange={(e) => {
+              setGeneralPassword(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="Not set"
+            disabled={loading}
+            className="border border-neutral-300 rounded px-3 py-2"
+          />
+          <p className="text-neutral-500 text-xs">
+            Used to log in by any member with no password of their own set (Setup → Users). Shown in plain text,
+            not masked, so you can read and share it. Never works for Admin accounts - they always need their own
+            password.
+          </p>
+        </div>
+
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
             disabled={saving || loading}
-            className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50 self-start"
+            className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save"}
           </button>

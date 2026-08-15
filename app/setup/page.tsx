@@ -14,7 +14,7 @@ export default async function SetupPage() {
           <MenuButton href="/settings" label="General" description="WhatsApp number and other app preferences" />
         )}
         {visible("settings-users") && (
-          <MenuButton href="/setup/users" label="Users" description="Login access, roles, and active status per member" />
+          <MenuButton href="/setup/users" label="Users" description="Login access, roles, merging, and menu access" />
         )}
         {visible("settings-categories") && (
           <MenuButton href="/categories" label="Categories" description="What gets imported and how it's stored" />
@@ -34,9 +34,6 @@ export default async function SetupPage() {
             label="Import Conductor History"
             description="Backfill past Conductor/Passenger selections from a CSV"
           />
-        )}
-        {visible("settings-menu-access") && (
-          <MenuButton href="/setup/menu-access" label="Menu Access" description="Which roles can see each menu button" />
         )}
       </div>
     </div>

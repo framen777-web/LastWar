@@ -1,7 +1,25 @@
-import { requireMenuAccess } from "@/lib/menuAccess";
-import { UsersClient } from "./UsersClient";
+import { MenuButton } from "@/components/MenuButton";
+import { requireMenuAccess, getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
 
-export default async function UsersPage() {
-  await requireMenuAccess("settings-users");
-  return <UsersClient />;
+export default async function UsersHubPage() {
+  const user = await requireMenuAccess("settings-users");
+  const access = await getMenuAccessMap();
+  const visible = (key: string) => canSeeMenuItem(access, key, user.role);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold">Users</h1>
+      <div className="flex flex-col gap-3 max-w-sm">
+        {visible("users-list") && (
+          <MenuButton href="/setup/users/list" label="Users" description="Login access, roles, and active status per member" />
+        )}
+        {visible("users-merge") && (
+          <MenuButton href="/setup/users/merge" label="Merge" description="Combine two member rows that turned out to be the same person" />
+        )}
+        {visible("users-menu-access") && (
+          <MenuButton href="/setup/users/menu-access" label="Menu Access" description="Which roles can see each menu button" />
+        )}
+      </div>
+    </div>
+  );
 }
