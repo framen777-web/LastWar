@@ -193,18 +193,32 @@ async function main() {
   }
   console.log(`Seeded ${CATEGORIES.length} categories.`);
 
-  // create-only, never update: once a row exists, its `roles` is admin-customized state -
-  // re-running this seed (e.g. after adding a new button) must never clobber that.
+  // `roles` is the one admin-customized field (edited from Menu Access) - never touched on
+  // an existing row. `label`/`href`/`sortOrder` are code-owned (there's no UI to change
+  // them), so those stay in sync with MENU_ITEMS on every run - sortOrder is this array's
+  // own position, so the Menu Access table always lists main menu items followed by their
+  // submenus in the same order the real nav renders them.
   let menuItemsCreated = 0;
-  for (const item of MENU_ITEMS) {
+  let menuItemsUpdated = 0;
+  for (const [sortOrder, item] of MENU_ITEMS.entries()) {
     const existing = await prisma.menuItem.findUnique({ where: { key: item.key } });
-    if (existing) continue;
+    if (existing) {
+      if (existing.label !== item.label || existing.href !== item.href || existing.sortOrder !== sortOrder) {
+        await prisma.menuItem.update({ where: { key: item.key }, data: { label: item.label, href: item.href, sortOrder } });
+        menuItemsUpdated++;
+      }
+      continue;
+    }
     await prisma.menuItem.create({
-      data: { key: item.key, label: item.label, href: item.href, roles: JSON.stringify(item.roles) },
+      data: { key: item.key, label: item.label, href: item.href, sortOrder, roles: JSON.stringify(item.roles) },
     });
     menuItemsCreated++;
   }
-  console.log(`Seeded ${menuItemsCreated} new menu item(s) (${MENU_ITEMS.length - menuItemsCreated} already existed).`);
+  console.log(
+    `Menu items: ${menuItemsCreated} created, ${menuItemsUpdated} updated (label/href/sortOrder), ${
+      MENU_ITEMS.length - menuItemsCreated - menuItemsUpdated
+    } unchanged.`
+  );
 }
 
 main()

@@ -96,6 +96,10 @@ model MenuItem {
   label     String
   href      String
   roles     String // JSON array of "ADMIN" | "LEADER" | "MEMBER"
+  // Display order for the Menu Access admin table only (main menu items followed by their
+  // submenus, matching the real nav hierarchy) - has no effect on how/where a button
+  // actually renders, which stays controlled by each hub page's own JSX.
+  sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
 }
 

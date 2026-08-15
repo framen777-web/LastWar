@@ -8,7 +8,7 @@ export async function GET() {
   const gate = await requireAdminApi();
   if ("error" in gate) return gate.error;
 
-  const items = await prisma.menuItem.findMany({ orderBy: { label: "asc" } });
+  const items = await prisma.menuItem.findMany({ orderBy: { sortOrder: "asc" } });
   return NextResponse.json({
     items: items.map((i) => ({ key: i.key, label: i.label, href: i.href, roles: JSON.parse(i.roles) as string[] })),
   });

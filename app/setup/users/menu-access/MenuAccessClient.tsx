@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type Role = "ADMIN" | "LEADER" | "MEMBER";
 const ALL_ROLES: Role[] = ["ADMIN", "LEADER", "MEMBER"];
+const ROLE_LABELS: Record<Role, string> = { ADMIN: "Admin", LEADER: "Leader", MEMBER: "Member" };
 
 type MenuItem = { key: string; label: string; href: string; roles: Role[] };
 
@@ -11,6 +12,7 @@ export function MenuAccessClient() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -42,9 +44,15 @@ export function MenuAccessClient() {
     setBusyKey(null);
   }
 
-  function handleSelectChange(item: MenuItem, e: React.ChangeEvent<HTMLSelectElement>) {
-    const selected = Array.from(e.target.selectedOptions).map((o) => o.value as Role);
-    setRoles(item.key, selected);
+  function toggleRole(item: MenuItem, role: Role) {
+    const next = item.roles.includes(role) ? item.roles.filter((r) => r !== role) : [...item.roles, role];
+    setRoles(item.key, next);
+  }
+
+  function summaryText(roles: Role[]): string {
+    if (roles.length === 0) return "None";
+    if (roles.length === ALL_ROLES.length) return "All";
+    return roles.map((r) => ROLE_LABELS[r]).join(", ");
   }
 
   return (
@@ -71,28 +79,49 @@ export function MenuAccessClient() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.key} className="border-b border-neutral-100">
-                  <td className="py-2 pr-3 font-medium whitespace-nowrap">{item.label}</td>
-                  <td className="py-2 pr-3 text-neutral-500 whitespace-nowrap">{item.href}</td>
-                  <td className="py-2 pr-3">
-                    <select
-                      multiple
-                      size={3}
-                      value={item.roles}
-                      disabled={busyKey === item.key}
-                      onChange={(e) => handleSelectChange(item, e)}
-                      className="border border-neutral-300 rounded px-2 py-1 text-xs w-32"
-                    >
-                      {ALL_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role.charAt(0) + role.slice(1).toLowerCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
+              {items.map((item) => {
+                const isOpen = openKey === item.key;
+                return (
+                  <tr key={item.key} className="border-b border-neutral-100">
+                    <td className="py-2 pr-3 font-medium whitespace-nowrap">{item.label}</td>
+                    <td className="py-2 pr-3 text-neutral-500 whitespace-nowrap">{item.href}</td>
+                    <td className="py-2 pr-3">
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={() => setOpenKey(isOpen ? null : item.key)}
+                          disabled={busyKey === item.key}
+                          className="border border-neutral-300 rounded px-2 py-1 text-xs w-36 text-left flex items-center justify-between gap-1 disabled:opacity-50 bg-surface-raised"
+                        >
+                          <span className="truncate">{summaryText(item.roles)}</span>
+                          <span className="text-neutral-400 shrink-0">▾</span>
+                        </button>
+
+                        {isOpen && (
+                          <>
+                            {/* Tap-anywhere-outside-to-close backdrop - simpler and more
+                                reliable on mobile than a document click listener. */}
+                            <div className="fixed inset-0 z-30" onClick={() => setOpenKey(null)} />
+                            <div className="absolute left-0 top-full mt-1 z-40 bg-surface-raised border border-neutral-300 rounded shadow-lg p-2 flex flex-col gap-1.5 w-36">
+                              {ALL_ROLES.map((role) => (
+                                <label key={role} className="flex items-center gap-2 text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.roles.includes(role)}
+                                    onChange={() => toggleRole(item, role)}
+                                    className="w-4 h-4"
+                                  />
+                                  {ROLE_LABELS[role]}
+                                </label>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
