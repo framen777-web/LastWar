@@ -120,6 +120,53 @@ const CATEGORIES = [
   },
 ];
 
+// One row per navigable MenuButton in the app - see lib/menuAccess.ts. Every new button
+// added to any hub page must get an entry here too, or it's invisible to everyone
+// (fail-closed). Keep this list in sync with the actual JSX across app/page.tsx,
+// app/new-information/page.tsx, app/reports/page.tsx, app/setup/page.tsx,
+// app/dashboards/page.tsx, and app/dashboards/alliance/page.tsx.
+const MENU_ITEMS = [
+  { key: "home-my-stats", label: "My Stats", href: "/dashboard", roles: ["MEMBER"] },
+  { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"] },
+  { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"] },
+  { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"] },
+  { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"] },
+  { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"] },
+
+  { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"] },
+  { key: "uploads-review", label: "Upload review", href: "/dashboard", roles: ["ADMIN", "LEADER"] },
+  { key: "uploads-multi-event-review", label: "Multi Event review", href: "/dashboard/multi", roles: ["ADMIN", "LEADER"] },
+  { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"] },
+
+  { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-leaderboard", label: "Leaderboards", href: "/reports/leaderboard", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-new-records", label: "New Records", href: "/reports/new-records", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-clubs", label: "VS Clubs", href: "/reports/clubs", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-squads", label: "Squads", href: "/reports/squad-power", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"] },
+
+  { key: "dashboards-individual", label: "Individual Dashboard", href: "/dashboards/individual", roles: ["ADMIN", "LEADER", "MEMBER"] },
+  { key: "dashboards-alliance", label: "Alliance Reports", href: "/dashboards/alliance", roles: ["ADMIN", "LEADER"] },
+
+  { key: "alliance-detail-report", label: "Detail Report", href: "/dashboards/alliance/detail", roles: ["ADMIN", "LEADER"] },
+  { key: "alliance-graphs", label: "Graphs", href: "/dashboards/alliance/graphs", roles: ["ADMIN", "LEADER"] },
+
+  { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"] },
+  { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"] },
+  { key: "settings-categories", label: "Categories", href: "/categories", roles: ["ADMIN"] },
+  { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"] },
+  { key: "settings-conductor", label: "Conductor Settings", href: "/setup/conductor", roles: ["ADMIN"] },
+  { key: "settings-import-history", label: "Import History", href: "/setup/import-history", roles: ["ADMIN"] },
+  {
+    key: "settings-import-conductor-history",
+    label: "Import Conductor History",
+    href: "/setup/import-conductor-history",
+    roles: ["ADMIN"],
+  },
+  { key: "settings-menu-access", label: "Menu Access", href: "/setup/menu-access", roles: ["ADMIN"] },
+];
+
 async function main() {
   for (const category of CATEGORIES) {
     const data = {
@@ -141,6 +188,19 @@ async function main() {
     });
   }
   console.log(`Seeded ${CATEGORIES.length} categories.`);
+
+  // create-only, never update: once a row exists, its `roles` is admin-customized state -
+  // re-running this seed (e.g. after adding a new button) must never clobber that.
+  let menuItemsCreated = 0;
+  for (const item of MENU_ITEMS) {
+    const existing = await prisma.menuItem.findUnique({ where: { key: item.key } });
+    if (existing) continue;
+    await prisma.menuItem.create({
+      data: { key: item.key, label: item.label, href: item.href, roles: JSON.stringify(item.roles) },
+    });
+    menuItemsCreated++;
+  }
+  console.log(`Seeded ${menuItemsCreated} new menu item(s) (${MENU_ITEMS.length - menuItemsCreated} already existed).`);
 }
 
 main()

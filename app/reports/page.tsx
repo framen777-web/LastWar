@@ -1,48 +1,45 @@
 import { MenuButton } from "@/components/MenuButton";
 import { requireRole } from "@/lib/auth/dal";
+import { getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
 
 export default async function ReportsIndexPage() {
-  await requireRole(["ADMIN", "LEADER"]);
+  const user = await requireRole(["ADMIN", "LEADER"]);
+  const access = await getMenuAccessMap();
+  const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">End of Week Reports</h1>
       <div className="flex flex-col gap-3 max-w-sm">
-        <MenuButton
-          href="/reports/hq"
-          label="HQ Levels"
-          description="Members who leveled up this week, and the HQ level distribution"
-        />
-        <MenuButton
-          href="/reports/leaderboard"
-          label="Leaderboards"
-          description="Top 20 by week, trailing 5/10 weeks, improvement, and all-time"
-        />
-        <MenuButton
-          href="/reports/new-records"
-          label="New Records"
-          description="Members who beat their personal best this week"
-        />
-        <MenuButton
-          href="/reports/clubs"
-          label="VS Clubs"
-          description="Achievement tiers by best-ever VS reading"
-        />
-        <MenuButton
-          href="/reports/squad-power"
-          label="Squads"
-          description="Top squad type, 3-squad power, and week-over-week growth"
-        />
-        <MenuButton
-          href="/reports/mvp"
-          label="MVP Report"
-          description="Weighted MVP leaderboard for a week"
-        />
-        <MenuButton
-          href="/reports/r1"
-          label="R1 Report"
-          description="Rank-filtered members, VS/MVP trend, Promote/Watch"
-        />
+        {visible("reports-hq") && (
+          <MenuButton href="/reports/hq" label="HQ Levels" description="Members who leveled up this week, and the HQ level distribution" />
+        )}
+        {visible("reports-leaderboard") && (
+          <MenuButton
+            href="/reports/leaderboard"
+            label="Leaderboards"
+            description="Top 20 by week, trailing 5/10 weeks, improvement, and all-time"
+          />
+        )}
+        {visible("reports-new-records") && (
+          <MenuButton href="/reports/new-records" label="New Records" description="Members who beat their personal best this week" />
+        )}
+        {visible("reports-clubs") && (
+          <MenuButton href="/reports/clubs" label="VS Clubs" description="Achievement tiers by best-ever VS reading" />
+        )}
+        {visible("reports-squads") && (
+          <MenuButton
+            href="/reports/squad-power"
+            label="Squads"
+            description="Top squad type, 3-squad power, and week-over-week growth"
+          />
+        )}
+        {visible("reports-mvp") && (
+          <MenuButton href="/reports/mvp" label="MVP Report" description="Weighted MVP leaderboard for a week" />
+        )}
+        {visible("reports-r1") && (
+          <MenuButton href="/reports/r1" label="R1 Report" description="Rank-filtered members, VS/MVP trend, Promote/Watch" />
+        )}
       </div>
     </div>
   );

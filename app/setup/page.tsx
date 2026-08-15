@@ -1,20 +1,44 @@
 import { MenuButton } from "@/components/MenuButton";
 import { requireAdmin } from "@/lib/auth/dal";
+import { getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
 
 export default async function SetupPage() {
-  await requireAdmin();
+  const user = await requireAdmin();
+  const access = await getMenuAccessMap();
+  const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Settings</h1>
       <div className="flex flex-col gap-3 max-w-sm">
-        <MenuButton href="/settings" label="General" description="WhatsApp number and other app preferences" />
-        <MenuButton href="/setup/users" label="Users" description="Login access, roles, and active status per member" />
-        <MenuButton href="/categories" label="Categories" description="What gets imported and how it's stored" />
-        <MenuButton href="/setup/mvp-weights" label="MVP Weighting" description="Scoring weights used by the MVP and R1 reports" />
-        <MenuButton href="/setup/conductor" label="Conductor Settings" description="Cycle length, from-week, and Passenger rules" />
-        <MenuButton href="/setup/import-history" label="Import History" description="Bulk-import weekly stats from a CSV export" />
-        <MenuButton href="/setup/import-conductor-history" label="Import Conductor History" description="Backfill past Conductor/Passenger selections from a CSV" />
+        {visible("settings-general") && (
+          <MenuButton href="/settings" label="General" description="WhatsApp number and other app preferences" />
+        )}
+        {visible("settings-users") && (
+          <MenuButton href="/setup/users" label="Users" description="Login access, roles, and active status per member" />
+        )}
+        {visible("settings-categories") && (
+          <MenuButton href="/categories" label="Categories" description="What gets imported and how it's stored" />
+        )}
+        {visible("settings-mvp-weighting") && (
+          <MenuButton href="/setup/mvp-weights" label="MVP Weighting" description="Scoring weights used by the MVP and R1 reports" />
+        )}
+        {visible("settings-conductor") && (
+          <MenuButton href="/setup/conductor" label="Conductor Settings" description="Cycle length, from-week, and Passenger rules" />
+        )}
+        {visible("settings-import-history") && (
+          <MenuButton href="/setup/import-history" label="Import History" description="Bulk-import weekly stats from a CSV export" />
+        )}
+        {visible("settings-import-conductor-history") && (
+          <MenuButton
+            href="/setup/import-conductor-history"
+            label="Import Conductor History"
+            description="Backfill past Conductor/Passenger selections from a CSV"
+          />
+        )}
+        {visible("settings-menu-access") && (
+          <MenuButton href="/setup/menu-access" label="Menu Access" description="Which roles can see each menu button" />
+        )}
       </div>
     </div>
   );

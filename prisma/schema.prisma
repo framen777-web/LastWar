@@ -85,6 +85,20 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
+// One row per navigable menu button in the app - governs whether that button renders for
+// a given role (fail-closed: a role not listed here can't see it). This only controls
+// button *visibility* as a navigation aid - it does not replace each page's own
+// requireRole()/requireAdmin() guard, which remains the real access control. Granting a
+// role visibility here without also loosening that page's own guard just produces a
+// button that leads to a redirect - the two aren't automatically kept in sync.
+model MenuItem {
+  key       String   @id
+  label     String
+  href      String
+  roles     String // JSON array of "ADMIN" | "LEADER" | "MEMBER"
+  updatedAt DateTime @updatedAt
+}
+
 // The R1 Report's Promote/Watch flag, keyed per member per week so notes from
 // one week never bleed into another.
 model Suggestion {
