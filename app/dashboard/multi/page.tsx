@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
-import { MobileCardList } from "@/components/MobileCardList";
 import { MultiCategoryRowActions } from "@/components/MultiCategoryRowActions";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireRole } from "@/lib/auth/dal";
@@ -58,7 +57,7 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
 
   const columns: DataTableColumn[] = [
     ...(user.role === "ADMIN" ? [{ key: "actions", header: "" }] : []),
-    { key: "member", header: "Member", filter: "text" },
+    { key: "member", header: "Member", filter: "text", sticky: true },
     ...imports.map((dedupKey) => ({ key: dedupKey, header: formatImportLabel(dedupKey), filter: "number" as const })),
   ];
 
@@ -98,7 +97,7 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Multitable (Multiple Imports)</h1>
+      <h1 className="text-xl font-semibold">Multi Event Review</h1>
       <p className="text-neutral-500 text-sm">
         Each member's value per individual import — the breakdown behind the summed value on Weekly Info.
       </p>
@@ -149,14 +148,8 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
           No {selectedCategory.name} imports for week {selectedWeek} yet.
         </p>
       ) : (
-        <>
-          <div className="hidden md:block">
-            <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
-          </div>
-          <div className="md:hidden">
-            <MobileCardList columns={columns} rows={rows} titleKey="member" actionsKey="actions" />
-          </div>
-        </>
+        // Table on every screen size, same as Upload Review - this is an editing workflow.
+        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
       )}
     </div>
   );

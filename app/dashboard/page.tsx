@@ -98,7 +98,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   const columns: DataTableColumn[] = [
     ...(user.role === "ADMIN" ? [{ key: "actions", header: "" }] : []),
-    { key: "member", header: "Member", filter: "text" },
+    { key: "member", header: "Member", filter: "text", sticky: true },
     { key: "rank", header: "Rank", filter: "text" },
     ...(showAllCategories || showSquads
       ? [

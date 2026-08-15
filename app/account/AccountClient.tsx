@@ -7,13 +7,23 @@ export function AccountClient({
   name,
   role,
   initialTheme,
+  initialWhatsapp,
+  initialEmail,
 }: {
   name: string;
   role: "ADMIN" | "LEADER" | "MEMBER";
   initialTheme: string;
+  initialWhatsapp: string;
+  initialEmail: string;
 }) {
   const [theme, setTheme] = useState(initialTheme);
   const [themeError, setThemeError] = useState<string | null>(null);
+
+  const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
+  const [email, setEmail] = useState(initialEmail);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactSaved, setContactSaved] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -86,6 +96,27 @@ export function AccountClient({
     setConfirmPassword("");
   }
 
+  async function handleContactSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setContactError(null);
+    setContactSaved(false);
+    setSavingContact(true);
+
+    const res = await fetch("/api/account/contact", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ whatsapp, email }),
+    });
+    const data = await res.json();
+    setSavingContact(false);
+
+    if (!res.ok) {
+      setContactError(data.error ?? "Something went wrong.");
+      return;
+    }
+    setContactSaved(true);
+  }
+
   return (
     <div className="flex flex-col gap-8 max-w-lg">
       <div>
@@ -96,6 +127,60 @@ export function AccountClient({
       </div>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-semibold">Contact info</h2>
+        <p className="text-neutral-500 text-sm">
+          Optional. If you ever get locked out, this is how an admin can reach you to arrange a password reset -
+          it isn&apos;t used for anything else.
+        </p>
+
+        <form onSubmit={handleContactSubmit} className="flex flex-col gap-3 max-w-sm">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="contactWhatsapp" className="text-sm font-medium">
+              WhatsApp number
+            </label>
+            <input
+              id="contactWhatsapp"
+              type="tel"
+              value={whatsapp}
+              onChange={(e) => {
+                setWhatsapp(e.target.value);
+                setContactSaved(false);
+              }}
+              placeholder="e.g. 27821234567"
+              className="border border-neutral-300 rounded px-3 py-2"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="contactEmail" className="text-sm font-medium">
+              Email
+            </label>
+            <input
+              id="contactEmail"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setContactSaved(false);
+              }}
+              className="border border-neutral-300 rounded px-3 py-2"
+            />
+          </div>
+
+          {contactError && <p className="text-red-600 text-sm">{contactError}</p>}
+          {contactSaved && <p className="text-green-700 text-sm">Saved.</p>}
+
+          <button
+            type="submit"
+            disabled={savingContact}
+            className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50 self-start"
+          >
+            {savingContact ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
         <h2 className="font-semibold">Appearance</h2>
         <p className="text-neutral-500 text-sm">Colour scheme. Applies immediately.</p>
 

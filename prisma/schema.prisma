@@ -33,6 +33,12 @@ model Member {
   isActive     Boolean  @default(true)
   theme        String   @default("default")
 
+  // Self-reported, optional - so an admin has a way to reach a member who's locked out to
+  // arrange a manual password reset (Setup -> Users already lets an admin set a new
+  // password directly; nothing else reads these fields).
+  contactWhatsapp String?
+  contactEmail    String?
+
   weeklyStats         WeeklyStat[]
   categoryRecords     CategoryRecord[]
   suggestions         Suggestion[]

@@ -16,6 +16,10 @@ export type DataTableColumn = {
   filter?: "text" | "number";
   /** Fixed column width in px. If any column sets this, the whole table switches to a fixed layout. */
   width?: number;
+  /** Pins this column to the left edge of the scroll container on horizontal scroll - for
+   * a "Member" column on a wide table, so the name stays visible while scanning categories.
+   * Assumes it's the first column and `showRowNumbers` is off; only one column should set this. */
+  sticky?: boolean;
 };
 
 export type DataTableRow = {
@@ -119,6 +123,10 @@ export function DataTable({
   // (so one long name can't blow the column out and break the uniform width).
   const headerWidthClass = (col: DataTableColumn) => (col.width !== undefined ? "whitespace-normal break-words" : "");
   const cellWidthClass = (col: DataTableColumn) => (col.width !== undefined ? "whitespace-nowrap overflow-hidden text-ellipsis" : "");
+  // Needs its own opaque background - once pinned, other cells in the same row scroll
+  // underneath it and would otherwise show through.
+  const stickyHeaderClass = (col: DataTableColumn) => (col.sticky ? "sticky left-0 z-20 bg-surface-raised" : "");
+  const stickyCellClass = (col: DataTableColumn) => (col.sticky ? "sticky left-0 z-10 bg-surface-raised" : "");
 
   return (
     <div className="flex flex-col gap-2">
@@ -161,7 +169,7 @@ export function DataTable({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`${cellPad} ${ALIGN_CLASS[col.align ?? "left"]} ${headerWidthClass(col)} ${col.filter ? "cursor-pointer select-none" : ""}`}
+                  className={`${cellPad} ${ALIGN_CLASS[col.align ?? "left"]} ${headerWidthClass(col)} ${stickyHeaderClass(col)} ${col.filter ? "cursor-pointer select-none" : ""}`}
                   onClick={() => toggleSort(col)}
                 >
                   {col.header}
@@ -173,7 +181,7 @@ export function DataTable({
               <tr className="border-b border-neutral-200 text-left text-neutral-400 text-xs">
                 {showRowNumbers && <th className={cellPad}></th>}
                 {columns.map((col) => (
-                  <th key={col.key} className={`${cellPad} ${headerWidthClass(col)}`}>
+                  <th key={col.key} className={`${cellPad} ${headerWidthClass(col)} ${stickyHeaderClass(col)}`}>
                     {col.subHeader}
                   </th>
                 ))}
@@ -186,7 +194,7 @@ export function DataTable({
               <tr className="border-b border-neutral-200">
                 {showRowNumbers && <td className={cellPad}></td>}
                 {columns.map((col) => (
-                  <td key={col.key} className={cellPad}>
+                  <td key={col.key} className={`${cellPad} ${stickyHeaderClass(col)}`}>
                     {col.filter === "text" && (
                       <input
                         type="text"
@@ -213,7 +221,7 @@ export function DataTable({
                 <tr key={row.id} className="border-b border-neutral-100">
                   {showRowNumbers && <td className={`${cellPad} text-neutral-500`}>{i + 1}</td>}
                   {columns.map((col) => (
-                    <td key={col.key} className={`${cellPad} ${ALIGN_CLASS[col.align ?? "left"]} ${cellWidthClass(col)}`}>
+                    <td key={col.key} className={`${cellPad} ${ALIGN_CLASS[col.align ?? "left"]} ${cellWidthClass(col)} ${stickyCellClass(col)}`}>
                       {row.cells[col.key]}
                     </td>
                   ))}
@@ -224,7 +232,7 @@ export function DataTable({
               <tr className="font-semibold">
                 {showRowNumbers && <td className={cellPad}></td>}
                 {columns.map((col, i) => (
-                  <td key={col.key} className={`${cellPad} ${cellWidthClass(col)}`}>
+                  <td key={col.key} className={`${cellPad} ${cellWidthClass(col)} ${stickyCellClass(col)}`}>
                     {i === 0 ? footer!.label : footer!.sumKeys.includes(col.key) ? formatStatNumber(footerSums[col.key]) : ""}
                   </td>
                 ))}

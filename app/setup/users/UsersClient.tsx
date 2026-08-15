@@ -22,12 +22,14 @@ export function UsersClient() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minPasswordLength, setMinPasswordLength] = useState(8);
+  const [lastCompletedWeek, setLastCompletedWeek] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
     const res = await fetch("/api/users");
     const data = await res.json();
     setUsers(data.users ?? []);
+    setLastCompletedWeek(data.lastCompletedWeek ?? null);
     setLoading(false);
   }
 
@@ -66,8 +68,12 @@ export function UsersClient() {
       <h1 className="text-xl font-semibold">Users</h1>
       <p className="text-neutral-500 text-sm">
         Set a password to grant a member login access. Role is auto-derived from Alliance Rank (R4/R5 → Leader,
-        else Member) unless overridden here.
+        else Member) unless overridden here. Members&apos; Active status is automatic - it reflects whether they had
+        stats in the last completed week{lastCompletedWeek !== null ? ` (week ${lastCompletedWeek})` : ""}; Admin and
+        Leader accounts stay under your manual control below.
       </p>
+
+      <GeneralPassword minPasswordLength={minPasswordLength} />
 
       <input
         type="text"
@@ -141,16 +147,25 @@ export function UsersClient() {
                     </div>
                   </td>
                   <td className="py-2 pr-3">
-                    <button
-                      onClick={() => patchUser(u.id, { isActive: !u.isActive })}
-                      disabled={busyId === u.id}
-                      className={`w-9 h-5 rounded-full relative transition-colors ${u.isActive ? "bg-green-500" : "bg-neutral-300"}`}
-                      aria-label="Toggle active"
-                    >
+                    {u.effectiveRole === "MEMBER" ? (
                       <span
-                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${u.isActive ? "translate-x-4" : "translate-x-0.5"}`}
-                      />
-                    </button>
+                        title="Auto-managed from last completed week's stats"
+                        className={`text-xs px-2 py-0.5 rounded ${u.isActive ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-500"}`}
+                      >
+                        {u.isActive ? "Active" : "Inactive"}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => patchUser(u.id, { isActive: !u.isActive })}
+                        disabled={busyId === u.id}
+                        className={`w-9 h-5 rounded-full relative transition-colors ${u.isActive ? "bg-green-500" : "bg-neutral-300"}`}
+                        aria-label="Toggle active"
+                      >
+                        <span
+                          className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${u.isActive ? "translate-x-4" : "translate-x-0.5"}`}
+                        />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -160,6 +175,70 @@ export function UsersClient() {
       )}
 
       <MergeMembers users={users} onMerged={load} />
+    </div>
+  );
+}
+
+function GeneralPassword({ minPasswordLength }: { minPasswordLength: number }) {
+  const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => setValue(data.settings?.generalPassword ?? ""))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setError(null);
+    setSaved(false);
+    if (value && value.length < minPasswordLength) {
+      setError(`Password must be at least ${minPasswordLength} characters.`);
+      return;
+    }
+    setSaving(true);
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ generalPassword: value }),
+    });
+    setSaving(false);
+    setSaved(true);
+  }
+
+  return (
+    <div className="border border-neutral-200 rounded max-w-md p-4 flex flex-col gap-2">
+      <div className="font-semibold text-sm">General password</div>
+      <p className="text-neutral-500 text-xs">
+        Used to log in by any member with no password of their own set below. Shown in plain text, not masked, so
+        you can read and share it. Never works for Admin accounts - they always need their own password.
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={value}
+          disabled={loading}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="Not set"
+          className="border border-neutral-300 rounded px-2 py-1 text-sm w-48"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="border border-neutral-300 rounded px-3 py-1 text-sm disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {saved && <span className="text-green-700 text-xs">Saved</span>}
+      </div>
+      {error && <p className="text-red-600 text-xs">{error}</p>}
     </div>
   );
 }

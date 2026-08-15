@@ -12,3 +12,8 @@ export async function getGeminiApiKey(): Promise<string | undefined> {
   const setting = await prisma.setting.findUnique({ where: { key: "geminiApiKey" } });
   return setting?.value || process.env.GEMINI_API_KEY;
 }
+
+export async function getGeneralPassword(): Promise<string | undefined> {
+  const setting = await prisma.setting.findUnique({ where: { key: "generalPassword" } });
+  return setting?.value || undefined;
+}
