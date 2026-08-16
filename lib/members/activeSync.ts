@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { effectiveRole } from "@/lib/auth/roles";
+import { getActiveMemberIdsForWeek } from "./weekActivity";
 
 // "Active" for a plain Member means "had data in the last COMPLETED week" - the week
 // before whatever the most recent week with any data is (that latest week is still being
@@ -14,14 +15,7 @@ export async function syncMemberActiveStatus(): Promise<{ lastCompletedWeek: num
   const lastCompletedWeek = latest.weekNumber - 1;
   if (lastCompletedWeek < 1) return { lastCompletedWeek };
 
-  // WeeklyStat alone would miss a member who only reported Squads that week - that's
-  // free_text (see dashboard/page.tsx), so it only ever produces a CategoryRecord row, no
-  // WeeklyStat row. Union both sources so a squads-only reporter still counts as active.
-  const [statMembers, recordMembers] = await Promise.all([
-    prisma.weeklyStat.findMany({ where: { weekNumber: lastCompletedWeek }, select: { memberId: true }, distinct: ["memberId"] }),
-    prisma.categoryRecord.findMany({ where: { weekNumber: lastCompletedWeek }, select: { memberId: true }, distinct: ["memberId"] }),
-  ]);
-  const activeIds = new Set([...statMembers.map((s) => s.memberId), ...recordMembers.map((r) => r.memberId)]);
+  const activeIds = await getActiveMemberIdsForWeek(lastCompletedWeek);
 
   const members = await prisma.member.findMany({
     select: { id: true, role: true, allianceRank: true, isActive: true },

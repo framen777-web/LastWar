@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getActiveMemberIdsForWeek } from "@/lib/members/weekActivity";
 
 export type MemberMovementRow = { memberId: number; name: string };
 
@@ -11,22 +12,11 @@ export type MemberMovementReport = {
   left: MemberMovementRow[];
 };
 
-// "Active in week N" mirrors lib/members/activeSync.ts's own definition - any member with a
-// WeeklyStat row or a CategoryRecord row for that week (union, since squads-only reporters
-// never produce a WeeklyStat row).
-async function activeMemberIdsForWeek(weekNumber: number): Promise<Set<number>> {
-  const [statMembers, recordMembers] = await Promise.all([
-    prisma.weeklyStat.findMany({ where: { weekNumber }, select: { memberId: true }, distinct: ["memberId"] }),
-    prisma.categoryRecord.findMany({ where: { weekNumber }, select: { memberId: true }, distinct: ["memberId"] }),
-  ]);
-  return new Set([...statMembers.map((s) => s.memberId), ...recordMembers.map((r) => r.memberId)]);
-}
-
 export async function getMemberMovementReport(week: number): Promise<MemberMovementReport> {
   const priorWeek = week - 1;
   const [currentIds, priorIds] = await Promise.all([
-    activeMemberIdsForWeek(week),
-    priorWeek >= 1 ? activeMemberIdsForWeek(priorWeek) : Promise.resolve(new Set<number>()),
+    getActiveMemberIdsForWeek(week),
+    priorWeek >= 1 ? getActiveMemberIdsForWeek(priorWeek) : Promise.resolve(new Set<number>()),
   ]);
 
   const joinedIds = [...currentIds].filter((id) => !priorIds.has(id));

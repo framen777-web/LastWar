@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { computeStandings } from "./points";
 import { getConductorCategoryWeekValues, type CategoryWeekValue } from "./stats";
 import { getConductorSettings, isRandomRule, WEEKDAYS, type ConductorSettings, type Weekday } from "./settings";
+import { getActiveMemberIdsForWeekWithFallback } from "@/lib/members/weekActivity";
 
 export type DraftSlot = {
   slotIndex: number;
@@ -97,23 +98,40 @@ async function loadContext(startWeek: number, slotCount: number) {
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
   const weeksNeeded = new Set<number>();
   for (let i = 0; i < slotCount; i++) weeksNeeded.add(weekForSlot(i, startWeek));
-  return { settings, standings, categoryValues, members, memberNameById, weeksNeeded };
+
+  // Nobody without real data for a slot's own week is eligible for that slot, as either
+  // Conductor or Passenger - having stayed "active" overall (points balance, isActive) isn't
+  // enough on its own if they simply didn't report that specific week.
+  const activeIdsByWeek = new Map<number, Set<number>>();
+  await Promise.all(
+    [...weeksNeeded].map(async (w) => {
+      activeIdsByWeek.set(w, await getActiveMemberIdsForWeekWithFallback(w));
+    })
+  );
+
+  return { settings, standings, categoryValues, members, memberNameById, weeksNeeded, activeIdsByWeek };
 }
 
 /** Generates and persists a new draft round: top-N conductors by balance, one passenger per day per the weekday rules. */
 export async function generateDraft(weeksInCycle: number, startWeek: number): Promise<{ roundId: number; slots: DraftSlot[] }> {
   const slotCount = weeksInCycle * 7;
-  const { settings, standings, categoryValues, members, memberNameById } = await loadContext(startWeek, slotCount);
+  const { settings, standings, categoryValues, members, memberNameById, activeIdsByWeek } = await loadContext(startWeek, slotCount);
 
   const slots: DraftSlot[] = [];
   const conductorByIndex = new Map<number, number>();
+  const usedConductorIds = new Set<number>();
 
   for (let i = 0; i < slotCount; i++) {
-    const pick = standings[i];
+    const weekNumber = weekForSlot(i, startWeek);
+    const weekActiveIds = activeIdsByWeek.get(weekNumber)!;
+    // Highest-balance member not already Conductor elsewhere in this round who also has real
+    // data for this specific week - a high balance from earlier weeks doesn't carry someone
+    // through a week they didn't report at all.
+    const pick = standings.find((s) => !usedConductorIds.has(s.memberId) && weekActiveIds.has(s.memberId));
     slots.push({
       slotIndex: i,
       weekday: weekdayForSlot(i),
-      weekNumber: weekForSlot(i, startWeek),
+      weekNumber,
       role: "conductor",
       memberId: pick?.memberId ?? null,
       memberName: pick ? (memberNameById.get(pick.memberId) ?? pick.memberName) : null,
@@ -122,9 +140,12 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
       sourceRank: null,
       manualOverride: false,
       collision: !pick,
-      collisionReason: pick ? null : "Not enough eligible members for this slot.",
+      collisionReason: pick ? null : "No eligible member with data for this week.",
     });
-    if (pick) conductorByIndex.set(i, pick.memberId);
+    if (pick) {
+      conductorByIndex.set(i, pick.memberId);
+      usedConductorIds.add(pick.memberId);
+    }
   }
 
   const usedPassengerMemberIds = new Set<number>();
@@ -140,8 +161,11 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
     const weekNumber = weekForSlot(i, startWeek);
     const rule = settings.weekdayRules[weekday];
     const conductorMemberId = conductorByIndex.get(i) ?? null;
+    const weekActiveIds = activeIdsByWeek.get(weekNumber)!;
     const isAvailable = (candidateId: number) =>
-      candidateId !== conductorMemberId && (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
+      candidateId !== conductorMemberId &&
+      weekActiveIds.has(candidateId) &&
+      (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
 
     let result: { memberId: number | null; sourceRank: number | null; collision: boolean; collisionReason: string | null };
     let sourceCategoryKey: string | null = null;
@@ -225,8 +249,10 @@ async function retryUnresolvedPassengers(round: { status: string; selections: { 
 
   const updates: { id: number; memberId: number | null; sourceRank: number | null }[] = [];
   for (const s of pending) {
+    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(s.weekNumber);
     const isAvailable = (candidateId: number) =>
       candidateId !== conductorMemberBySlot.get(s.slotIndex) &&
+      weekActiveIds.has(candidateId) &&
       (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
 
     let result: { memberId: number | null; sourceRank: number | null };
@@ -315,6 +341,7 @@ export async function overrideSlot(
     }
   } else if (input.sourceCategoryKey !== undefined && role === "passenger") {
     const settings = await getConductorSettings();
+    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(existing.weekNumber);
     const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
     const usedElsewhere = new Set(
       round.selections
@@ -322,7 +349,9 @@ export async function overrideSlot(
         .map((s) => s.memberId as number)
     );
     const isAvailable = (candidateId: number) =>
-      candidateId !== conductorSlot?.memberId && (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
+      candidateId !== conductorSlot?.memberId &&
+      weekActiveIds.has(candidateId) &&
+      (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
 
     if (input.sourceCategoryKey === null) {
       const pool = members.map((m) => m.id).filter(isAvailable);
@@ -341,6 +370,7 @@ export async function overrideSlot(
   } else if (input.sourceRank !== undefined && role === "passenger" && existing.sourceCategoryKey) {
     const settings = await getConductorSettings();
     const categoryValues = await getConductorCategoryWeekValues();
+    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(existing.weekNumber);
     const leaderboard = buildLeaderboardWithFallback(members, categoryValues, existing.sourceCategoryKey, existing.weekNumber);
     const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
     const usedElsewhere = new Set(
@@ -349,7 +379,9 @@ export async function overrideSlot(
         .map((s) => s.memberId as number)
     );
     const isAvailable = (candidateId: number) =>
-      candidateId !== conductorSlot?.memberId && (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
+      candidateId !== conductorSlot?.memberId &&
+      weekActiveIds.has(candidateId) &&
+      (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
     const result = resolvePassenger(leaderboard, input.sourceRank, isAvailable, false);
     memberId = result.memberId;
     sourceRank = result.sourceRank ?? input.sourceRank;
@@ -392,7 +424,11 @@ export async function rerollPassengerSlot(
   if (!existing) return { ok: false, error: "Slot not found." };
   if (existing.sourceCategoryKey) return { ok: false, error: "Only Random slots can be rerolled - this one is field-based." };
 
-  const [settings, members] = await Promise.all([getConductorSettings(), prisma.member.findMany({ where: { isActive: true } })]);
+  const [settings, members, weekActiveIds] = await Promise.all([
+    getConductorSettings(),
+    prisma.member.findMany({ where: { isActive: true } }),
+    getActiveMemberIdsForWeekWithFallback(existing.weekNumber),
+  ]);
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
 
   const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
@@ -402,7 +438,9 @@ export async function rerollPassengerSlot(
       .map((s) => s.memberId as number)
   );
   const isAvailable = (candidateId: number) =>
-    candidateId !== conductorSlot?.memberId && (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
+    candidateId !== conductorSlot?.memberId &&
+    weekActiveIds.has(candidateId) &&
+    (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
 
   const pool = members.map((m) => m.id).filter(isAvailable);
   // Prefer a genuinely different pick from what's already there, when another option exists.
@@ -482,8 +520,10 @@ export async function overrideSlotRankCascade(
     const slot = sameCategory[p];
     const requestedRank = Math.max(1, sourceRank + (p - changedPos));
     const leaderboard = buildLeaderboardWithFallback(members, categoryValues, changed.sourceCategoryKey, slot.weekNumber);
+    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(slot.weekNumber);
     const isAvailable = (candidateId: number) =>
       candidateId !== conductorMemberBySlot.get(slot.slotIndex) &&
+      weekActiveIds.has(candidateId) &&
       !usedElsewhere.has(candidateId) &&
       (settings.allowDuplicatePassengers || !usedInGroup.has(candidateId));
     const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
