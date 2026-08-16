@@ -369,6 +369,10 @@ function CombinedSlotTable({
                       {passenger.sourceCategoryKey ? (
                         editable ? (
                           <input
+                            // Remount whenever the field or the stored rank changes server-side
+                            // (a field switch, a cascade from another row, a reroll) so this
+                            // uncontrolled input's shown value never goes stale.
+                            key={`${passenger.sourceCategoryKey}:${passenger.sourceRank}`}
                             type="number"
                             min={1}
                             disabled={pendingPassenger}

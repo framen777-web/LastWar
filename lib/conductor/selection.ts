@@ -128,6 +128,7 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
 
     let result: { memberId: number | null; sourceRank: number | null; collision: boolean; collisionReason: string | null };
     let sourceCategoryKey: string | null = null;
+    let requestedRank: number | null = null;
 
     if (isRandomRule(rule)) {
       const pool = activeMemberIds.filter(isAvailable);
@@ -137,10 +138,10 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
           : { memberId: null, sourceRank: null, collision: true, collisionReason: "No eligible member available for Random." };
     } else {
       sourceCategoryKey = rule.categoryKey;
-      const effectiveRank = categoryLastRank.has(rule.categoryKey) ? categoryLastRank.get(rule.categoryKey)! + 1 : rule.rank;
-      categoryLastRank.set(rule.categoryKey, effectiveRank);
+      requestedRank = categoryLastRank.has(rule.categoryKey) ? categoryLastRank.get(rule.categoryKey)! + 1 : rule.rank;
+      categoryLastRank.set(rule.categoryKey, requestedRank);
       const leaderboard = buildLeaderboard(members, categoryValues, rule.categoryKey, weekNumber);
-      result = resolvePassenger(leaderboard, effectiveRank, isAvailable, settings.autoResolveCollisions);
+      result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
     }
 
     if (result.memberId !== null) usedPassengerMemberIds.add(result.memberId);
@@ -153,8 +154,11 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
       memberId: result.memberId,
       memberName: result.memberId !== null ? (memberNameById.get(result.memberId) ?? null) : null,
       pointsAtSelection: null,
-      sourceCategoryKey: result.memberId !== null ? sourceCategoryKey : null,
-      sourceRank: result.sourceRank,
+      // Keep the rule's own field even when nobody could be resolved for it (no data for
+      // that week, or every candidate already used) - a collision should read "VS, no
+      // member found", not silently mislabel the slot as Random.
+      sourceCategoryKey,
+      sourceRank: result.sourceRank ?? requestedRank,
       manualOverride: false,
       collision: result.collision,
       collisionReason: result.collisionReason,
