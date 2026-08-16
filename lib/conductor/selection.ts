@@ -182,9 +182,65 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
   return { roundId: round.id, slots };
 }
 
+/**
+ * Any Passenger slot still unresolved (no member found the last time it was resolved) gets
+ * one more attempt every time the round is loaded - not just at generation time - since the
+ * conditions that blocked it (a week's data not being in yet, another slot using up the only
+ * available candidate) can change afterward. A slot the admin has manually touched is never
+ * re-picked out from under them; it stays exactly as they left it.
+ */
+async function retryUnresolvedPassengers(round: { status: string; selections: { id: number; role: string; slotIndex: number; weekNumber: number; memberId: number | null; sourceCategoryKey: string | null; sourceRank: number | null; manualOverride: boolean }[] }): Promise<void> {
+  if (round.status !== "draft") return;
+
+  const pending = round.selections.filter((s) => s.role === "passenger" && s.memberId === null && !s.manualOverride);
+  if (pending.length === 0) return;
+
+  const [settings, categoryValues, activeMembers] = await Promise.all([
+    getConductorSettings(),
+    getConductorCategoryWeekValues(),
+    prisma.member.findMany({ where: { isActive: true } }),
+  ]);
+  const activeMemberIds = activeMembers.map((m) => m.id);
+  const conductorMemberBySlot = new Map(round.selections.filter((s) => s.role === "conductor").map((s) => [s.slotIndex, s.memberId]));
+  const usedPassengerMemberIds = new Set(
+    round.selections.filter((s) => s.role === "passenger" && s.memberId !== null).map((s) => s.memberId as number)
+  );
+
+  const updates: { id: number; memberId: number | null; sourceRank: number | null }[] = [];
+  for (const s of pending) {
+    const isAvailable = (candidateId: number) =>
+      candidateId !== conductorMemberBySlot.get(s.slotIndex) &&
+      (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
+
+    let result: { memberId: number | null; sourceRank: number | null };
+    if (s.sourceCategoryKey) {
+      const leaderboard = buildLeaderboard(activeMembers, categoryValues, s.sourceCategoryKey, s.weekNumber);
+      const requestedRank = s.sourceRank ?? 1;
+      result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+    } else {
+      const pool = activeMemberIds.filter(isAvailable);
+      result = pool.length > 0 ? { memberId: pool[Math.floor(Math.random() * pool.length)], sourceRank: null } : { memberId: null, sourceRank: null };
+    }
+
+    if (result.memberId === null) continue;
+    usedPassengerMemberIds.add(result.memberId);
+    s.memberId = result.memberId;
+    if (result.sourceRank !== null) s.sourceRank = result.sourceRank;
+    updates.push({ id: s.id, memberId: result.memberId, sourceRank: s.sourceRank });
+  }
+
+  if (updates.length > 0) {
+    await prisma.$transaction(
+      updates.map((u) => prisma.conductorSelection.update({ where: { id: u.id }, data: { memberId: u.memberId, sourceRank: u.sourceRank } }))
+    );
+  }
+}
+
 export async function getRoundSlots(roundId: number): Promise<{ round: { id: number; weeksInCycle: number; startWeek: number; status: string }; slots: DraftSlot[] } | null> {
   const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
   if (!round) return null;
+
+  await retryUnresolvedPassengers(round);
 
   const members = await prisma.member.findMany();
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
