@@ -126,7 +126,7 @@ const CATEGORIES = [
 // app/new-information/page.tsx, app/reports/page.tsx, app/setup/page.tsx,
 // app/setup/users/page.tsx, app/dashboards/page.tsx, and app/dashboards/alliance/page.tsx.
 const MENU_ITEMS = [
-  { key: "home-my-stats", label: "My Stats", href: "/dashboard", roles: ["MEMBER"], parentKey: null },
+  { key: "home-my-stats", label: "Detail List", href: "/dashboard", roles: ["MEMBER"], parentKey: null },
   { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"], parentKey: null },
   { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"], parentKey: null },
   { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"], parentKey: null },
@@ -184,6 +184,20 @@ const MENU_ITEMS = [
     href: "/dashboards/individual",
     roles: ["ADMIN", "LEADER", "MEMBER"],
     parentKey: "home-dashboards",
+  },
+  {
+    key: "individual-detail-list",
+    label: "Detail List",
+    href: "/dashboards/individual/detail",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: "dashboards-individual",
+  },
+  {
+    key: "individual-graphs",
+    label: "Graphs",
+    href: "/dashboards/individual/graphs",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: "dashboards-individual",
   },
   {
     key: "dashboards-alliance",

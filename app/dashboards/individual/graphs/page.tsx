@@ -7,8 +7,11 @@ import { getGraphMetrics, getGraphSeries } from "@/lib/dashboards/categoryGraph"
 
 const WEEK_COUNT_OPTIONS = [4, 8, 12, 26, 52];
 
-export default async function AllianceGraphsPage({ searchParams }: PageProps<"/dashboards/alliance/graphs">) {
-  await requireMenuAccess("alliance-graphs");
+export default async function IndividualGraphsPage({ searchParams }: PageProps<"/dashboards/individual/graphs">) {
+  // Unlike the Alliance Reports version, this page is always scoped to whoever is logged
+  // in - even an Admin/Leader viewing their own Individual Dashboard only ever sees their
+  // own bars here, there's no commander picker at all.
+  const user = await requireMenuAccess("individual-graphs");
   const params = await searchParams;
 
   const metrics = await getGraphMetrics();
@@ -27,31 +30,17 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
   const metricParam = Array.isArray(params.metric) ? params.metric[0] : params.metric;
   const selectedMetric = metrics.find((m) => m.key === metricParam) ?? metrics[0];
 
-  const commanderParam = Array.isArray(params.commander) ? params.commander[0] : params.commander;
-  const selectedCommander = commanderParam && commanderParam !== "all" ? Number(commanderParam) : "all";
-
-  const aggregationParam = Array.isArray(params.aggregation) ? params.aggregation[0] : params.aggregation;
-  const aggregation = aggregationParam === "average" ? "average" : "sum";
-
-  const members = await prisma.member.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
-
   const knownWeeks = await prisma.weeklyStat.findMany({
+    where: { memberId: user.id },
     select: { weekNumber: true },
     distinct: ["weekNumber"],
     orderBy: { weekNumber: "desc" },
   });
   const weekNumbers = knownWeeks.map((w) => w.weekNumber);
-  // Newest week first, matching the bar chart's own left-to-right order.
   const selectedWeeks = weekNumbers.slice(0, weeksCount);
 
-  const series = await getGraphSeries(selectedMetric.key, selectedMetric.cumulative, selectedWeeks, selectedCommander, aggregation);
+  const series = await getGraphSeries(selectedMetric.key, selectedMetric.cumulative, selectedWeeks, user.id, "sum");
   const bars = series.map((s) => ({ label: `W${s.week}`, value: s.value }));
-
-  const commanderName = selectedCommander === "all" ? null : (members.find((m) => m.id === selectedCommander)?.name ?? null);
-  const chartTitle =
-    selectedCommander === "all"
-      ? `${selectedMetric.label} - All commanders (${aggregation === "sum" ? "total" : "average"})`
-      : `${selectedMetric.label} - ${commanderName ?? "Unknown member"}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,42 +69,17 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
           ))}
         </select>
 
-        <label htmlFor="commander" className="font-medium">
-          Commander
-        </label>
-        <select
-          id="commander"
-          name="commander"
-          defaultValue={selectedCommander === "all" ? "all" : selectedCommander}
-          className="border border-neutral-300 rounded px-2 py-1"
-        >
-          <option value="all">All commanders</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-
-        <label htmlFor="aggregation" className="font-medium">
-          When &quot;All&quot;
-        </label>
-        <select id="aggregation" name="aggregation" defaultValue={aggregation} className="border border-neutral-300 rounded px-2 py-1">
-          <option value="sum">Sum</option>
-          <option value="average">Average</option>
-        </select>
-
         <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
           Go
         </button>
       </form>
 
-      <ZoomWrapper contentId="alliance-graph-content">
+      <ZoomWrapper contentId="individual-graph-content">
         <div className="border border-neutral-200 rounded overflow-hidden">
-          <div className="bg-sky-300 px-3 py-1 font-semibold text-neutral-900">{chartTitle}</div>
+          <div className="bg-sky-300 px-3 py-1 font-semibold text-neutral-900">{selectedMetric.label}</div>
           <div className="p-4">
-            {bars.every((b) => b.value === 0) ? (
-              <p className="text-neutral-500 text-sm">No data for this selection.</p>
+            {selectedWeeks.length === 0 || bars.every((b) => b.value === 0) ? (
+              <p className="text-neutral-500 text-sm">No data yet.</p>
             ) : (
               <BarChart bars={bars} formatValue={formatStatNumber} />
             )}

@@ -9,7 +9,7 @@ export default async function Home() {
 
   return (
     <div className="flex flex-col gap-3 max-w-sm mx-auto">
-      {visible("home-my-stats") && <MenuButton href="/dashboard" label="My Stats" description="Your stats for a given week" />}
+      {visible("home-my-stats") && <MenuButton href="/dashboard" label="Detail List" description="Your stats for a given week" />}
       {visible("home-uploads") && <MenuButton href="/new-information" label="Uploads" description="Import screenshots and view stats" />}
       {visible("home-end-of-week-reports") && (
         <MenuButton href="/reports" label="End of week reports" description="Records, leaderboards and growth for a given week" />

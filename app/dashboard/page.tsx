@@ -175,7 +175,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "My Stats" : "Upload Review"}</h1>
+      <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "Detail List" : "Upload Review"}</h1>
 
       <form className="flex items-center gap-2 text-sm flex-wrap">
         <label htmlFor="week" className="font-medium">
