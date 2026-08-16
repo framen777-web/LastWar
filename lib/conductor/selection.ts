@@ -40,6 +40,23 @@ function buildLeaderboard(
     .sort((a, b) => b.value - a.value);
 }
 
+/** Same as buildLeaderboard, but if a week has no data at all for this category yet (e.g. it
+ * hasn't been reported yet), falls back to the most recent earlier week that does - so "rank
+ * 3 in VS" for a not-yet-reported week resolves against the last real VS standings instead of
+ * staying unassigned until that week's data shows up. */
+function buildLeaderboardWithFallback(
+  members: { id: number }[],
+  values: Map<string, CategoryWeekValue>,
+  categoryKey: string,
+  weekNumber: number
+): LeaderboardEntry[] {
+  for (let w = weekNumber; w >= 1; w--) {
+    const leaderboard = buildLeaderboard(members, values, categoryKey, w);
+    if (leaderboard.length > 0) return leaderboard;
+  }
+  return [];
+}
+
 /** Resolves one passenger slot's field+rank rule against that week's leaderboard, honoring availability and auto-resolve. */
 function resolvePassenger(
   leaderboard: LeaderboardEntry[],
@@ -140,7 +157,7 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
       sourceCategoryKey = rule.categoryKey;
       requestedRank = categoryLastRank.has(rule.categoryKey) ? categoryLastRank.get(rule.categoryKey)! + 1 : rule.rank;
       categoryLastRank.set(rule.categoryKey, requestedRank);
-      const leaderboard = buildLeaderboard(members, categoryValues, rule.categoryKey, weekNumber);
+      const leaderboard = buildLeaderboardWithFallback(members, categoryValues, rule.categoryKey, weekNumber);
       result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
     }
 
@@ -214,7 +231,7 @@ async function retryUnresolvedPassengers(round: { status: string; selections: { 
 
     let result: { memberId: number | null; sourceRank: number | null };
     if (s.sourceCategoryKey) {
-      const leaderboard = buildLeaderboard(activeMembers, categoryValues, s.sourceCategoryKey, s.weekNumber);
+      const leaderboard = buildLeaderboardWithFallback(activeMembers, categoryValues, s.sourceCategoryKey, s.weekNumber);
       const requestedRank = s.sourceRank ?? 1;
       result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
     } else {
@@ -314,7 +331,7 @@ export async function overrideSlot(
       sourceRank = null;
     } else {
       const categoryValues = await getConductorCategoryWeekValues();
-      const leaderboard = buildLeaderboard(members, categoryValues, input.sourceCategoryKey, existing.weekNumber);
+      const leaderboard = buildLeaderboardWithFallback(members, categoryValues, input.sourceCategoryKey, existing.weekNumber);
       const requestedRank = existing.sourceRank ?? 1;
       const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
       sourceCategoryKey = input.sourceCategoryKey;
@@ -324,7 +341,7 @@ export async function overrideSlot(
   } else if (input.sourceRank !== undefined && role === "passenger" && existing.sourceCategoryKey) {
     const settings = await getConductorSettings();
     const categoryValues = await getConductorCategoryWeekValues();
-    const leaderboard = buildLeaderboard(members, categoryValues, existing.sourceCategoryKey, existing.weekNumber);
+    const leaderboard = buildLeaderboardWithFallback(members, categoryValues, existing.sourceCategoryKey, existing.weekNumber);
     const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
     const usedElsewhere = new Set(
       round.selections
@@ -464,7 +481,7 @@ export async function overrideSlotRankCascade(
   for (let p = 0; p < sameCategory.length; p++) {
     const slot = sameCategory[p];
     const requestedRank = Math.max(1, sourceRank + (p - changedPos));
-    const leaderboard = buildLeaderboard(members, categoryValues, changed.sourceCategoryKey, slot.weekNumber);
+    const leaderboard = buildLeaderboardWithFallback(members, categoryValues, changed.sourceCategoryKey, slot.weekNumber);
     const isAvailable = (candidateId: number) =>
       candidateId !== conductorMemberBySlot.get(slot.slotIndex) &&
       !usedElsewhere.has(candidateId) &&
