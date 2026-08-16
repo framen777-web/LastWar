@@ -126,48 +126,109 @@ const CATEGORIES = [
 // app/new-information/page.tsx, app/reports/page.tsx, app/setup/page.tsx,
 // app/setup/users/page.tsx, app/dashboards/page.tsx, and app/dashboards/alliance/page.tsx.
 const MENU_ITEMS = [
-  { key: "home-my-stats", label: "My Stats", href: "/dashboard", roles: ["MEMBER"] },
-  { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"] },
-  { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"] },
-  { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"] },
-  { key: "conductor-select", label: "Select Conductors & Passengers", href: "/conductor/select", roles: ["ADMIN", "LEADER"] },
-  { key: "conductor-history", label: "History", href: "/conductor/history", roles: ["ADMIN", "LEADER"] },
-  { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"] },
-  { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"] },
+  { key: "home-my-stats", label: "My Stats", href: "/dashboard", roles: ["MEMBER"], parentKey: null },
+  { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"], parentKey: null },
+  { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"], parentKey: null },
+  { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"], parentKey: null },
+  {
+    key: "conductor-select",
+    label: "Select Conductors & Passengers",
+    href: "/conductor/select",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-conductor",
+  },
+  { key: "conductor-history", label: "History", href: "/conductor/history", roles: ["ADMIN", "LEADER"], parentKey: "home-conductor" },
+  { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
+  { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"], parentKey: null },
 
-  { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"] },
-  { key: "uploads-review", label: "Upload review", href: "/dashboard", roles: ["ADMIN", "LEADER"] },
-  { key: "uploads-multi-event-review", label: "Multi Event review", href: "/dashboard/multi", roles: ["ADMIN", "LEADER"] },
-  { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"] },
+  { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"], parentKey: "home-uploads" },
+  { key: "uploads-review", label: "Upload review", href: "/dashboard", roles: ["ADMIN", "LEADER"], parentKey: "home-uploads" },
+  {
+    key: "uploads-multi-event-review",
+    label: "Multi Event review",
+    href: "/dashboard/multi",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-uploads",
+  },
+  { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"], parentKey: "home-uploads" },
 
-  { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-leaderboard", label: "Leaderboards", href: "/reports/leaderboard", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-new-records", label: "New Records", href: "/reports/new-records", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-clubs", label: "VS Clubs", href: "/reports/clubs", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-squads", label: "Squads", href: "/reports/squad-power", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"] },
-  { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"] },
+  { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  {
+    key: "reports-leaderboard",
+    label: "Leaderboards",
+    href: "/reports/leaderboard",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  {
+    key: "reports-new-records",
+    label: "New Records",
+    href: "/reports/new-records",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  { key: "reports-clubs", label: "VS Clubs", href: "/reports/clubs", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  {
+    key: "reports-squads",
+    label: "Squads",
+    href: "/reports/squad-power",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
 
-  { key: "dashboards-individual", label: "Individual Dashboard", href: "/dashboards/individual", roles: ["ADMIN", "LEADER", "MEMBER"] },
-  { key: "dashboards-alliance", label: "Alliance Reports", href: "/dashboards/alliance", roles: ["ADMIN", "LEADER"] },
+  {
+    key: "dashboards-individual",
+    label: "Individual Dashboard",
+    href: "/dashboards/individual",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: "home-dashboards",
+  },
+  {
+    key: "dashboards-alliance",
+    label: "Alliance Reports",
+    href: "/dashboards/alliance",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-dashboards",
+  },
 
-  { key: "alliance-detail-report", label: "Detail Report", href: "/dashboards/alliance/detail", roles: ["ADMIN", "LEADER"] },
-  { key: "alliance-graphs", label: "Graphs", href: "/dashboards/alliance/graphs", roles: ["ADMIN", "LEADER"] },
+  {
+    key: "alliance-detail-report",
+    label: "Detail Report",
+    href: "/dashboards/alliance/detail",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "dashboards-alliance",
+  },
+  {
+    key: "alliance-graphs",
+    label: "Graphs",
+    href: "/dashboards/alliance/graphs",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "dashboards-alliance",
+  },
 
-  { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"] },
-  { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"] },
-  { key: "users-list", label: "Users", href: "/setup/users/list", roles: ["ADMIN"] },
-  { key: "users-merge", label: "Merge", href: "/setup/users/merge", roles: ["ADMIN"] },
-  { key: "users-menu-access", label: "Menu Access", href: "/setup/users/menu-access", roles: ["ADMIN"] },
-  { key: "settings-categories", label: "Categories", href: "/categories", roles: ["ADMIN"] },
-  { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"] },
-  { key: "settings-conductor", label: "Conductor Settings", href: "/setup/conductor", roles: ["ADMIN"] },
-  { key: "settings-import-history", label: "Import History", href: "/setup/import-history", roles: ["ADMIN"] },
+  { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "users-list", label: "Users", href: "/setup/users/list", roles: ["ADMIN"], parentKey: "settings-users" },
+  { key: "users-merge", label: "Merge", href: "/setup/users/merge", roles: ["ADMIN"], parentKey: "settings-users" },
+  { key: "users-menu-access", label: "Menu Access", href: "/setup/users/menu-access", roles: ["ADMIN"], parentKey: "settings-users" },
+  { key: "settings-categories", label: "Categories", href: "/categories", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "settings-conductor", label: "Conductor Settings", href: "/setup/conductor", roles: ["ADMIN"], parentKey: "home-settings" },
+  {
+    key: "settings-import-history",
+    label: "Import History",
+    href: "/setup/import-history",
+    roles: ["ADMIN"],
+    parentKey: "home-settings",
+  },
   {
     key: "settings-import-conductor-history",
     label: "Import Conductor History",
     href: "/setup/import-conductor-history",
     roles: ["ADMIN"],
+    parentKey: "home-settings",
   },
 ];
 
@@ -194,23 +255,31 @@ async function main() {
   console.log(`Seeded ${CATEGORIES.length} categories.`);
 
   // `roles` is the one admin-customized field (edited from Menu Access) - never touched on
-  // an existing row. `label`/`href`/`sortOrder` are code-owned (there's no UI to change
-  // them), so those stay in sync with MENU_ITEMS on every run - sortOrder is this array's
-  // own position, so the Menu Access table always lists main menu items followed by their
-  // submenus in the same order the real nav renders them.
+  // an existing row. `label`/`href`/`sortOrder`/`parentKey` are code-owned (there's no UI to
+  // change them), so those stay in sync with MENU_ITEMS on every run - sortOrder is this
+  // array's own position, and parentKey drives the Menu Access page's tree structure, so the
+  // page always mirrors the real nav hierarchy exactly.
   let menuItemsCreated = 0;
   let menuItemsUpdated = 0;
   for (const [sortOrder, item] of MENU_ITEMS.entries()) {
     const existing = await prisma.menuItem.findUnique({ where: { key: item.key } });
     if (existing) {
-      if (existing.label !== item.label || existing.href !== item.href || existing.sortOrder !== sortOrder) {
-        await prisma.menuItem.update({ where: { key: item.key }, data: { label: item.label, href: item.href, sortOrder } });
+      if (
+        existing.label !== item.label ||
+        existing.href !== item.href ||
+        existing.sortOrder !== sortOrder ||
+        existing.parentKey !== item.parentKey
+      ) {
+        await prisma.menuItem.update({
+          where: { key: item.key },
+          data: { label: item.label, href: item.href, sortOrder, parentKey: item.parentKey },
+        });
         menuItemsUpdated++;
       }
       continue;
     }
     await prisma.menuItem.create({
-      data: { key: item.key, label: item.label, href: item.href, sortOrder, roles: JSON.stringify(item.roles) },
+      data: { key: item.key, label: item.label, href: item.href, sortOrder, parentKey: item.parentKey, roles: JSON.stringify(item.roles) },
     });
     menuItemsCreated++;
   }

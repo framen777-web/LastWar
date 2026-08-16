@@ -100,6 +100,11 @@ model MenuItem {
   // submenus, matching the real nav hierarchy) - has no effect on how/where a button
   // actually renders, which stays controlled by each hub page's own JSX.
   sortOrder Int      @default(0)
+  // The parent MenuItem's key, or null for a main menu item - lets the Menu Access admin
+  // page render an actual tree matching the real nav structure, and cascade a role change
+  // down to a whole branch at once. Not a Prisma relation on purpose (keeps this a plain,
+  // easy-to-query self-reference) - resolved manually in lib/menuAccess.ts.
+  parentKey String?
   updatedAt DateTime @updatedAt
 }
 

@@ -10,7 +10,13 @@ export async function GET() {
 
   const items = await prisma.menuItem.findMany({ orderBy: { sortOrder: "asc" } });
   return NextResponse.json({
-    items: items.map((i) => ({ key: i.key, label: i.label, href: i.href, roles: JSON.parse(i.roles) as string[] })),
+    items: items.map((i) => ({
+      key: i.key,
+      label: i.label,
+      href: i.href,
+      parentKey: i.parentKey,
+      roles: JSON.parse(i.roles) as string[],
+    })),
   });
 }
 
