@@ -84,6 +84,36 @@ export function SelectClient({
     }
   }
 
+  // Every PATCH already returns the exact slot(s) it just resolved, so apply that response
+  // directly instead of following it up with a separate GET - that second round-trip could
+  // land its own (slightly older) snapshot after the PATCH's, visually reverting the edit
+  // that was just made.
+  function applyPatchedSlot(slot: DraftSlot) {
+    setSlots((prev) => prev.map((s) => (s.slotIndex === slot.slotIndex && s.role === slot.role ? slot : s)));
+  }
+
+  async function submitSlotPatch(slot: DraftSlot, body: Record<string, unknown>) {
+    if (!round) return;
+    const key = `${slot.slotIndex}:${slot.role}`;
+    setPendingSlot(key);
+    const res = await fetch(`/api/conductor/rounds/${round.id}/slots`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, ...body }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "Failed to update slot.");
+    } else if (data.slots) {
+      // A rank change cascades to every slot sharing that field - the response is the whole
+      // round's fresh slot list, not just this one.
+      setSlots(data.slots);
+    } else if (data.slot) {
+      applyPatchedSlot(data.slot);
+    }
+    setPendingSlot(null);
+  }
+
   async function handleGenerate() {
     setGenerating(true);
     setError(null);
@@ -102,55 +132,19 @@ export function SelectClient({
   }
 
   async function handleOverrideMember(slot: DraftSlot, memberId: number) {
-    if (!round) return;
-    const key = `${slot.slotIndex}:${slot.role}`;
-    setPendingSlot(key);
-    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, memberId }),
-    });
-    await refetchRound(round.id);
-    setPendingSlot(null);
+    await submitSlotPatch(slot, { memberId });
   }
 
   async function handleOverrideRank(slot: DraftSlot, sourceRank: number) {
-    if (!round) return;
-    const key = `${slot.slotIndex}:${slot.role}`;
-    setPendingSlot(key);
-    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, sourceRank }),
-    });
-    await refetchRound(round.id);
-    setPendingSlot(null);
+    await submitSlotPatch(slot, { sourceRank });
   }
 
   async function handleOverrideCategory(slot: DraftSlot, categoryKey: string | null) {
-    if (!round) return;
-    const key = `${slot.slotIndex}:${slot.role}`;
-    setPendingSlot(key);
-    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, sourceCategoryKey: categoryKey }),
-    });
-    await refetchRound(round.id);
-    setPendingSlot(null);
+    await submitSlotPatch(slot, { sourceCategoryKey: categoryKey });
   }
 
   async function handleReroll(slot: DraftSlot) {
-    if (!round) return;
-    const key = `${slot.slotIndex}:${slot.role}`;
-    setPendingSlot(key);
-    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, reroll: true }),
-    });
-    await refetchRound(round.id);
-    setPendingSlot(null);
+    await submitSlotPatch(slot, { reroll: true });
   }
 
   async function handleConfirm() {
