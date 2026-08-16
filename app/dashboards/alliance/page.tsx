@@ -19,6 +19,13 @@ export default async function AllianceReportsHubPage() {
           />
         )}
         {visible("alliance-graphs") && <MenuButton href="/dashboards/alliance/graphs" label="Graphs" description="Coming soon" />}
+        {visible("alliance-member-movement") && (
+          <MenuButton
+            href="/dashboards/alliance/member-movement"
+            label="Member Movement"
+            description="Who joined and left between last week and the selected week"
+          />
+        )}
       </div>
     </div>
   );

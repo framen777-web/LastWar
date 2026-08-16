@@ -207,6 +207,13 @@ const MENU_ITEMS = [
     roles: ["ADMIN", "LEADER"],
     parentKey: "dashboards-alliance",
   },
+  {
+    key: "alliance-member-movement",
+    label: "Member Movement",
+    href: "/dashboards/alliance/member-movement",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "dashboards-alliance",
+  },
 
   { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },
