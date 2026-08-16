@@ -12,7 +12,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "memberId and weekNumber are required." }, { status: 400 });
   }
 
-  const value = body.value === "Promote" || body.value === "Watch" ? body.value : null;
+  const VALID_VALUES = ["Promote", "Watch", "Demote"];
+  const value = typeof body.value === "string" && VALID_VALUES.includes(body.value) ? body.value : null;
 
   const suggestion = await prisma.suggestion.upsert({
     where: { memberId_weekNumber: { memberId: body.memberId, weekNumber: body.weekNumber } },

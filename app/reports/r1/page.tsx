@@ -12,6 +12,7 @@ import { LimitSelect } from "@/components/LimitSelect";
 const SUGGESTION_BADGE_STYLES: Record<string, string> = {
   Promote: "bg-green-100 text-green-800 border-green-300",
   Watch: "bg-amber-100 text-amber-800 border-amber-300",
+  Demote: "bg-red-100 text-red-800 border-red-300",
 };
 
 function SuggestionBadge({ value }: { value: string | null }) {
@@ -123,6 +124,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
         thisWeekVS: r.vsScore,
         currentAvgMvp,
         thisWeekMvp: r.mvp,
+        suggestion: suggestionByMember.get(r.memberId) ?? null,
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -175,6 +177,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
     { key: "thisWeekVS", header: "This Week VS", filter: "number", width: REPORT_VALUE_COL_WIDTH },
     { key: "currentAvgMvp", header: "Current AVG MVP", filter: "number", width: REPORT_VALUE_COL_WIDTH },
     { key: "thisWeekMvp", header: "This week MVP", filter: "number", width: REPORT_VALUE_COL_WIDTH },
+    { key: "suggestion", header: "Suggestion", width: REPORT_VALUE_COL_WIDTH },
   ];
 
   const panelBRows: DataTableRow[] = panelBLimited.map((r) => {
@@ -193,6 +196,11 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           {fmtMvp(r.thisWeekMvp)}
           <Delta from={r.currentAvgMvp} to={r.thisWeekMvp} decimals={2} />
         </>
+      ),
+      suggestion: isAdmin ? (
+        <SuggestionSelect memberId={r.memberId} weekNumber={selectedWeek} initialValue={r.suggestion} options={["Watch", "Demote"]} />
+      ) : (
+        <SuggestionBadge value={r.suggestion} />
       ),
     };
     const sortValues: Record<string, number | string> = { member: r.name, thisWeekMvp: r.thisWeekMvp };
