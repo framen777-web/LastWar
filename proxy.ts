@@ -2,37 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/auth/session";
-import { effectiveRole } from "@/lib/auth/roles";
 
-type Classification = "public" | "any-authenticated" | "admin-leader" | "admin-only";
+const PUBLIC_PREFIXES = ["/login", "/setup-admin", "/api/auth"];
 
-// Ordered most-specific-first; first prefix match wins. This is the *optimistic* check -
-// every page/route also enforces its own role requirement (see lib/auth/dal.ts), which is
-// the actual access control. Unrecognized paths fail closed to admin-only.
-const RULES: { prefix: string; classification: Classification }[] = [
-  { prefix: "/login", classification: "public" },
-  { prefix: "/setup-admin", classification: "public" },
-  { prefix: "/api/auth", classification: "public" },
-  { prefix: "/account", classification: "any-authenticated" },
-  { prefix: "/api/account", classification: "any-authenticated" },
-  { prefix: "/dashboard/multi", classification: "admin-leader" },
-  { prefix: "/dashboard", classification: "any-authenticated" },
-  { prefix: "/reports", classification: "admin-leader" },
-  { prefix: "/new-information", classification: "admin-leader" },
-  { prefix: "/", classification: "any-authenticated" },
-];
-
-function classifyPath(pathname: string): Classification {
-  for (const rule of RULES) {
-    if (rule.prefix === "/") {
-      if (pathname === "/") return rule.classification;
-      continue;
-    }
-    if (pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)) {
-      return rule.classification;
-    }
-  }
-  return "admin-only";
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 async function noAdminExists(): Promise<boolean> {
@@ -40,12 +14,23 @@ async function noAdminExists(): Promise<boolean> {
   return count === 0;
 }
 
+// Authentication only ("is there a valid, active session") - not authorization. Which role
+// can see which page is entirely owned by that page's own requireRole()/requireMenuAccess()
+// call (lib/auth/dal.ts, lib/menuAccess.ts) and the Menu Access admin screen driving it -
+// every page and API route already has its own real guard (verified directly: 36/36 pages,
+// 31/31 API routes).
+//
+// This used to *also* classify every path into a hardcoded role table here, as a fast
+// pre-filter before the real per-page check ran. That table never got updated as new routes
+// were added (e.g. /dashboards, /setup/users, /conductor never made it in) and defaulted
+// anything unrecognized to admin-only - so it silently redirected Members away from pages
+// Menu Access said they should be able to see, before Menu Access or the page itself ever
+// got a chance to run. Removed rather than kept in sync in two places at once.
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const classification = classifyPath(pathname);
   const isApi = pathname.startsWith("/api/");
 
-  if (classification === "public") return NextResponse.next();
+  if (isPublic(pathname)) return NextResponse.next();
 
   const payload = await decrypt(request.cookies.get("session")?.value);
 
@@ -59,17 +44,6 @@ export default async function proxy(request: NextRequest) {
   if (!member || !member.isActive) {
     if (isApi) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  const role = effectiveRole(member);
-  const allowed =
-    classification === "any-authenticated" ||
-    (classification === "admin-leader" && (role === "ADMIN" || role === "LEADER")) ||
-    (classification === "admin-only" && role === "ADMIN");
-
-  if (!allowed) {
-    if (isApi) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();
