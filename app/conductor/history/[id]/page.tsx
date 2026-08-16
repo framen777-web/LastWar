@@ -3,6 +3,7 @@ import { getRoundSlots } from "@/lib/conductor/selection";
 import { formatAnnouncementText } from "@/lib/conductor/report";
 import { CopyTextButton } from "@/components/CopyTextButton";
 import { requireMenuAccess } from "@/lib/menuAccess";
+import { UnconfirmButton } from "./UnconfirmButton";
 
 const WEEKDAY_LABELS: Record<string, string> = {
   monday: "Monday",
@@ -15,7 +16,7 @@ const WEEKDAY_LABELS: Record<string, string> = {
 };
 
 export default async function ConductorHistoryDetailPage({ params }: PageProps<"/conductor/history/[id]">) {
-  await requireMenuAccess("conductor-history");
+  const user = await requireMenuAccess("conductor-history");
   const { id } = await params;
 
   const result = await getRoundSlots(Number(id));
@@ -62,6 +63,17 @@ export default async function ConductorHistoryDetailPage({ params }: PageProps<"
         <textarea readOnly value={announcement} rows={slotCount * 3 + 2} className="border border-neutral-300 rounded px-3 py-2 text-sm font-mono w-full max-w-lg" />
         <CopyTextButton text={announcement} label="Copy announcement" />
       </div>
+
+      {user.role === "ADMIN" && round.status === "confirmed" && (
+        <div className="border border-neutral-200 rounded p-4 flex flex-col gap-2 max-w-xl">
+          <h2 className="font-semibold text-sm">Undo this confirmation</h2>
+          <p className="text-neutral-500 text-xs">
+            Sends this round back to draft and restores every listed Conductor&apos;s points balance to what it was
+            before this round was confirmed. Use this if this round was confirmed by mistake or needs to be redone.
+          </p>
+          <UnconfirmButton roundId={round.id} />
+        </div>
+      )}
     </div>
   );
 }

@@ -583,3 +583,19 @@ export async function confirmRound(roundId: number): Promise<{ ok: true } | { ok
   await prisma.conductorRound.update({ where: { id: roundId }, data: { status: "confirmed", confirmedAt: new Date() } });
   return { ok: true };
 }
+
+/**
+ * Reverts a confirmed round back to draft. computeStandings() only counts a round's frozen
+ * pointsAtSelection toward lessSelected while it's confirmed, so this alone restores every
+ * affected member's balance to what it was before - no separate point mutation needed. The
+ * round and its picks are left in place (not deleted) so they can still be reviewed, edited,
+ * or re-confirmed rather than lost outright.
+ */
+export async function unconfirmRound(roundId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const round = await prisma.conductorRound.findUnique({ where: { id: roundId } });
+  if (!round) return { ok: false, error: "Round not found." };
+  if (round.status !== "confirmed") return { ok: false, error: "Round is not confirmed." };
+
+  await prisma.conductorRound.update({ where: { id: roundId }, data: { status: "draft", confirmedAt: null } });
+  return { ok: true };
+}
