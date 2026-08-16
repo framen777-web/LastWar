@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CategoryForm, type Category } from "@/components/CategoryForm";
+import { ResetCategoryWeek } from "@/components/ResetCategoryWeek";
 
 export function CategoriesClient() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -206,6 +207,10 @@ export function CategoriesClient() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {!loading && categories.length > 0 && (
+        <ResetCategoryWeek categories={categories.map((c) => ({ key: c.key, name: c.name }))} />
       )}
 
       {panelOpen && (
