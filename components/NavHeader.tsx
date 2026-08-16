@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/auth/actions";
+import { useNavigationBlocker } from "@/components/NavigationBlocker";
 
 function BackIcon() {
   return (
@@ -28,6 +29,18 @@ export function NavHeader({ user }: { user: NavUser }) {
   const router = useRouter();
   const isHome = pathname === "/";
   const isLoginish = pathname === "/login" || pathname === "/setup-admin";
+  const { isBlocked, blockMessage } = useNavigationBlocker();
+
+  // Covers in-app navigation only - see components/NavigationBlocker.tsx for why the
+  // browser's own physical back/forward button can't be intercepted the same way.
+  function guardedNavigate(e: { preventDefault: () => void }) {
+    if (isBlocked && !window.confirm(blockMessage)) e.preventDefault();
+  }
+
+  function handleBack() {
+    if (isBlocked && !window.confirm(blockMessage)) return;
+    router.back();
+  }
 
   return (
     <header className="border-b border-neutral-200 bg-surface-raised sticky top-0 z-10">
@@ -35,7 +48,7 @@ export function NavHeader({ user }: { user: NavUser }) {
         <div className="w-10">
           {!isHome && (
             <button
-              onClick={() => router.back()}
+              onClick={handleBack}
               aria-label="Back"
               className="p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded"
             >
@@ -43,13 +56,14 @@ export function NavHeader({ user }: { user: NavUser }) {
             </button>
           )}
         </div>
-        <Link href="/" className="font-semibold text-sm">
+        <Link href="/" onNavigate={guardedNavigate} className="font-semibold text-sm">
           Alliance Stats
         </Link>
         <div className="w-10 flex justify-end">
           {!isHome && (
             <Link
               href="/"
+              onNavigate={guardedNavigate}
               aria-label="Home"
               className="p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded"
             >

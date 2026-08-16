@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useNavigationBlocker } from "@/components/NavigationBlocker";
+
+const LEAVE_WARNING =
+  "An upload is still processing. Leaving won't stop it - files already queued keep uploading in the background - but you'll lose the progress and results view. Leave anyway?";
 
 type PipelineResult = {
   filename: string;
@@ -36,6 +40,8 @@ export function UploadClient() {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [results, setResults] = useState<PipelineResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const { setBlock } = useNavigationBlocker();
 
   useEffect(() => {
     fetch("/api/weeks")
@@ -52,6 +58,23 @@ export function UploadClient() {
       });
   }, []);
 
+  // Covers an actual tab close/refresh/typed URL - in-app navigation (NavHeader's Back/Home)
+  // goes through useNavigationBlocker instead, since beforeunload doesn't fire for Next.js
+  // client-side route changes.
+  useEffect(() => {
+    if (!submitting) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [submitting]);
+
+  function handleCancel() {
+    abortControllerRef.current?.abort();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (files.length === 0) return;
@@ -59,6 +82,10 @@ export function UploadClient() {
     setSubmitting(true);
     setError(null);
     setResults(null);
+    setBlock(true, LEAVE_WARNING);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     // Processed one file per request (not one batch request) so the button can show
     // real "file X of N" progress instead of a single opaque "Processing…" for the
@@ -67,8 +94,14 @@ export function UploadClient() {
     // is the normal case, not an error condition to abort on.
     const collected: PipelineResult[] = [];
     const failed: { filename: string; reason: string }[] = [];
+    let completed = 0;
+    let cancelled = false;
     try {
       for (let i = 0; i < files.length; i++) {
+        if (controller.signal.aborted) {
+          cancelled = true;
+          break;
+        }
         setProgress({ current: i + 1, total: files.length });
         const file = files[i];
 
@@ -77,7 +110,7 @@ export function UploadClient() {
           formData.set("weekNumber", String(weekNumber));
           formData.append("files", file);
 
-          const res = await fetch("/api/upload", { method: "POST", body: formData });
+          const res = await fetch("/api/upload", { method: "POST", body: formData, signal: controller.signal });
           const data = await res.json();
 
           if (!res.ok) {
@@ -86,16 +119,30 @@ export function UploadClient() {
           }
           collected.push(...data.results);
         } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") {
+            cancelled = true;
+            break;
+          }
           failed.push({ filename: file.name, reason: err instanceof Error ? err.message : String(err) });
+        } finally {
+          completed++;
         }
       }
       setResults(collected.length > 0 ? collected : null);
-      if (failed.length > 0) {
-        setError(`${failed.length} of ${files.length} file(s) failed:\n${failed.map((f) => `${f.filename}: ${f.reason}`).join("\n")}`);
+
+      const messages: string[] = [];
+      if (cancelled) {
+        messages.push(`Cancelled - ${completed} of ${files.length} file(s) were attempted before stopping.`);
       }
+      if (failed.length > 0) {
+        messages.push(`${failed.length} of ${files.length} file(s) failed:\n${failed.map((f) => `${f.filename}: ${f.reason}`).join("\n")}`);
+      }
+      if (messages.length > 0) setError(messages.join("\n\n"));
     } finally {
       setSubmitting(false);
       setProgress(null);
+      setBlock(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -167,6 +214,15 @@ export function UploadClient() {
           >
             {submitting ? "Processing…" : "Upload & process"}
           </button>
+          {submitting && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="border border-neutral-300 rounded px-4 py-2 hover:bg-neutral-50"
+            >
+              Cancel
+            </button>
+          )}
           {progress && (
             <span className="text-sm text-neutral-500">
               Busy with file {progress.current} of {progress.total}

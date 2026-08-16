@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavHeader } from "@/components/NavHeader";
+import { NavigationBlockerProvider } from "@/components/NavigationBlocker";
 import { getCurrentUser } from "@/lib/auth/dal";
 import "./globals.css";
 
@@ -29,8 +30,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-neutral-50 text-neutral-900">
-        <NavHeader user={user ? { name: user.name, role: user.role } : null} />
-        <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">{children}</main>
+        <NavigationBlockerProvider>
+          <NavHeader user={user ? { name: user.name, role: user.role } : null} />
+          <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">{children}</main>
+        </NavigationBlockerProvider>
       </body>
     </html>
   );
