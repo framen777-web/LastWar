@@ -100,7 +100,11 @@ function getImprovement(series: SeriesRow[], week: number, limit: string) {
       const count = priorCount.get(r.memberId) ?? 0;
       const avg = count > 0 ? priorSum.get(r.memberId)! / count : 0;
       if (avg <= 0) return null;
-      return { name: r.memberName, pct: Math.min(IMPROVEMENT_CAP, Math.round((r.value / avg) * 100)) };
+      // Percent IMPROVEMENT over the average, not percent OF the average - doing exactly
+      // the average was reading as "100% improvement" instead of the correct 0%, and
+      // anything better than 4x the average was hitting the cap at a number that looked
+      // arbitrary rather than meaning "capped at +500%".
+      return { name: r.memberName, pct: Math.min(IMPROVEMENT_CAP, Math.round((r.value / avg - 1) * 100)) };
     })
     .filter((r): r is { name: string; pct: number } => r !== null);
 

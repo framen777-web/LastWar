@@ -113,9 +113,25 @@ export function ShareScreenshotToWhatsApp({
       // every theme at once, not just this one bug.
       const pageBackground = resolveColor(getComputedStyle(document.body).backgroundColor);
 
+      // Without explicit width/height, html2canvas sizes the canvas from
+      // el.getBoundingClientRect() - but a wide report's panels (flex-row, flex-nowrap)
+      // overflow past their block-level container's own box, which doesn't grow to fit
+      // them. That crops everything past the container's edge, worse on a narrow phone
+      // where the container itself is much narrower than the report. scrollWidth/Height
+      // reflect the true content extent including that overflow (the same measurement
+      // ZoomWrapper already uses for its own auto-fit sizing), and windowWidth/Height keep
+      // html2canvas's simulated viewport wide enough that nothing wraps or clips during
+      // the off-screen layout pass either.
+      const captureWidth = el.scrollWidth;
+      const captureHeight = el.scrollHeight;
+
       const canvas = await html2canvas(el, {
         backgroundColor: pageBackground,
         scale: 2,
+        width: captureWidth,
+        height: captureHeight,
+        windowWidth: captureWidth,
+        windowHeight: captureHeight,
         onclone: (clonedDoc) => {
           normalizeColors(clonedDoc.body, resolveColor);
         },

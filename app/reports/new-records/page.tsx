@@ -40,21 +40,41 @@ const NEW_RECORDS_CATEGORIES = [
 
 type RecordRow = { name: string; newValue: number; oldValue: number; increasePct: number };
 
-async function getNewRecords(categoryKey: string, week: number, limit: string): Promise<RecordRow[]> {
+async function getNewRecords(categoryKey: string, cumulative: boolean, week: number, limit: string): Promise<RecordRow[]> {
   const stats = await prisma.weeklyStat.findMany({
     where: { categoryKey, weekNumber: { lte: week } },
     include: { member: true },
+    orderBy: { weekNumber: "asc" },
   });
 
-  const byMember = new Map<number, { name: string; thisWeek?: number; bestBefore?: number }>();
-  for (const s of stats) {
-    const entry = byMember.get(s.memberId) ?? { name: s.member.name };
-    if (s.weekNumber === week) {
-      entry.thisWeek = s.value;
-    } else {
-      entry.bestBefore = Math.max(entry.bestBefore ?? -Infinity, s.value);
+  // Kills is a lifetime-cumulative reading in-game (never resets), so the raw stored
+  // value only ever goes up - every member would "beat their record" every single week.
+  // Convert to the gain since each member's previous reading first, same conversion the
+  // Kills Leaderboard uses, so "personal best" means best *week*, not just "most kills
+  // ever accumulated by that point."
+  type Point = { weekNumber: number; memberId: number; name: string; value: number };
+  let points: Point[];
+  if (cumulative) {
+    const lastByMember = new Map<number, number>();
+    points = [];
+    for (const s of stats) {
+      const prev = lastByMember.get(s.memberId);
+      if (prev !== undefined) points.push({ weekNumber: s.weekNumber, memberId: s.memberId, name: s.member.name, value: s.value - prev });
+      lastByMember.set(s.memberId, s.value);
     }
-    byMember.set(s.memberId, entry);
+  } else {
+    points = stats.map((s) => ({ weekNumber: s.weekNumber, memberId: s.memberId, name: s.member.name, value: s.value }));
+  }
+
+  const byMember = new Map<number, { name: string; thisWeek?: number; bestBefore?: number }>();
+  for (const p of points) {
+    const entry = byMember.get(p.memberId) ?? { name: p.name };
+    if (p.weekNumber === week) {
+      entry.thisWeek = p.value;
+    } else {
+      entry.bestBefore = Math.max(entry.bestBefore ?? -Infinity, p.value);
+    }
+    byMember.set(p.memberId, entry);
   }
 
   const records: RecordRow[] = [];
@@ -111,8 +131,14 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
 
   const selectedLimit = parseLimitParam(params.limit, "20");
 
+  const categoryRows = await prisma.category.findMany({
+    where: { key: { in: NEW_RECORDS_CATEGORIES.map((c) => c.key) } },
+    select: { key: true, cumulative: true },
+  });
+  const cumulativeByKey = new Map(categoryRows.map((c) => [c.key, c.cumulative]));
+
   const newRecordsByCategory = await Promise.all(
-    NEW_RECORDS_CATEGORIES.map((c) => getNewRecords(c.key, selectedWeek, selectedLimit))
+    NEW_RECORDS_CATEGORIES.map((c) => getNewRecords(c.key, cumulativeByKey.get(c.key) ?? false, selectedWeek, selectedLimit))
   );
 
   const shareText = formatShareText(

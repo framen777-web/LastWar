@@ -8,15 +8,17 @@ import { requireMenuAccess } from "@/lib/menuAccess";
 type ClubRow = { name: string; value: number; week: number };
 
 // Achievement tiers based on each member's best-ever single-week VS reading (once you've
-// hit a tier, you're in it - not tied to current standing). 200 = 2,000,000-2,999,999 VS,
-// 300/400/500 the next million each; nothing for 6-999 million; Billionaires Club for
-// >= 1,000,000,000. Order matters - checked top-down, first match wins.
+// hit a tier, you're in it - not tied to current standing). The "vs" category is stored
+// divided by 1000 (see prisma/seed.ts's divisor: 1000), so these thresholds are the raw
+// VS score / 1000: 200 Club = 200,000,000-299,999,999 raw, 300/400 the next 100m each,
+// 500 Club spans 500m-999,999,999, Billionaires Club is >= 1,000,000,000 raw.
+// Order matters - checked top-down, first match wins.
 const CLUB_TIERS: { key: string; label: string; headerClass: string; min: number; max: number }[] = [
-  { key: "billionaires", label: "Billionaires Club", headerClass: "bg-amber-300", min: 1_000_000_000, max: Infinity },
-  { key: "500", label: "500 Club", headerClass: "bg-sky-300", min: 5_000_000, max: 5_999_999 },
-  { key: "400", label: "400 Club", headerClass: "bg-green-300", min: 4_000_000, max: 4_999_999 },
-  { key: "300", label: "300 Club", headerClass: "bg-pink-300", min: 3_000_000, max: 3_999_999 },
-  { key: "200", label: "200 Club", headerClass: "bg-neutral-300", min: 2_000_000, max: 2_999_999 },
+  { key: "billionaires", label: "Billionaires Club", headerClass: "bg-amber-300", min: 1_000_000, max: Infinity },
+  { key: "500", label: "500 Club", headerClass: "bg-sky-300", min: 500_000, max: 999_999 },
+  { key: "400", label: "400 Club", headerClass: "bg-green-300", min: 400_000, max: 499_999 },
+  { key: "300", label: "300 Club", headerClass: "bg-pink-300", min: 300_000, max: 399_999 },
+  { key: "200", label: "200 Club", headerClass: "bg-neutral-300", min: 200_000, max: 299_999 },
 ];
 
 const COLUMNS: DataTableColumn[] = [
