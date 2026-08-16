@@ -18,12 +18,19 @@ export function formatAnnouncementText(round: { weeksInCycle: number; startWeek:
 
   const lines = [`Conductor Rotation - ${weekLabel}`, ""];
 
+  // Cycle-relative week numbers (Week 1, Week 2...) rather than the real calendar week
+  // (65, 66...) - a "Week 2" section heading before its 7 days, even for a single-cycle
+  // round where that's just "Week 1".
   for (let i = 0; i < slotCount; i++) {
+    const cycleWeek = Math.floor(i / 7) + 1;
+    if (i % 7 === 0) {
+      if (i > 0) lines.push("");
+      lines.push(`Week ${cycleWeek}`);
+    }
     const conductor = slots.find((s) => s.slotIndex === i && s.role === "conductor");
     const passenger = slots.find((s) => s.slotIndex === i && s.role === "passenger");
     const dayLabel = WEEKDAY_LABELS[conductor?.weekday ?? passenger?.weekday ?? ""] ?? `Day ${i + 1}`;
-    const weekSuffix = round.weeksInCycle > 1 ? ` (Week ${conductor?.weekNumber ?? passenger?.weekNumber})` : "";
-    lines.push(`${dayLabel}${weekSuffix}`);
+    lines.push(dayLabel);
     lines.push(`  Conductor: ${conductor?.memberName ?? "—"}`);
     lines.push(`  Passenger: ${passenger?.memberName ?? "—"}`);
   }

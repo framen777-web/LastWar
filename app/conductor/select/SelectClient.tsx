@@ -41,12 +41,19 @@ function buildAnnouncementText(round: Round, slots: DraftSlot[]): string {
   const endWeek = round.startWeek + round.weeksInCycle - 1;
   const weekLabel = round.weeksInCycle > 1 ? `Weeks ${round.startWeek}-${endWeek}` : `Week ${round.startWeek}`;
   const lines = [`Conductor Rotation - ${weekLabel}`, ""];
+  // Cycle-relative week numbers (Week 1, Week 2...) rather than the real calendar week
+  // (65, 66...) - a "Week 2" section heading before its 7 days, even for a single-cycle
+  // round where that's just "Week 1".
   for (let i = 0; i < slotCount; i++) {
+    const cycleWeek = Math.floor(i / 7) + 1;
+    if (i % 7 === 0) {
+      if (i > 0) lines.push("");
+      lines.push(`Week ${cycleWeek}`);
+    }
     const conductor = slots.find((s) => s.slotIndex === i && s.role === "conductor");
     const passenger = slots.find((s) => s.slotIndex === i && s.role === "passenger");
     const dayLabel = WEEKDAY_LABELS[conductor?.weekday ?? passenger?.weekday ?? ""] ?? `Day ${i + 1}`;
-    const weekSuffix = round.weeksInCycle > 1 ? ` (Week ${conductor?.weekNumber ?? passenger?.weekNumber})` : "";
-    lines.push(`${dayLabel}${weekSuffix}`);
+    lines.push(dayLabel);
     lines.push(`  Conductor: ${conductor?.memberName ?? "—"}`);
     lines.push(`  Passenger: ${passenger?.memberName ?? "—"}`);
   }
@@ -241,7 +248,7 @@ export function SelectClient({
               <textarea
                 readOnly
                 value={buildAnnouncementText(round, slots)}
-                rows={round.weeksInCycle * 7 * 3 + 2}
+                rows={round.weeksInCycle * 7 * 3 + round.weeksInCycle * 2 + 1}
                 className="border border-neutral-300 rounded px-3 py-2 text-sm font-mono w-full max-w-lg"
               />
               <CopyTextButton text={buildAnnouncementText(round, slots)} label="Copy announcement" />
