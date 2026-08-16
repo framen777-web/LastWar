@@ -112,6 +112,11 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
 
   const usedPassengerMemberIds = new Set<number>();
   const activeMemberIds = members.map((m) => m.id);
+  // Each weekday's rule always points at the same category ("Monday is always vs"), but the
+  // rank used for it climbs by 1 every time that category comes up again - same week or a
+  // later one in this cycle - instead of resetting back to the rule's configured rank each
+  // time. Mirrors the math overrideSlotRankCascade uses for a manual rank edit.
+  const categoryLastRank = new Map<string, number>();
 
   for (let i = 0; i < slotCount; i++) {
     const weekday = weekdayForSlot(i);
@@ -132,8 +137,10 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
           : { memberId: null, sourceRank: null, collision: true, collisionReason: "No eligible member available for Random." };
     } else {
       sourceCategoryKey = rule.categoryKey;
+      const effectiveRank = categoryLastRank.has(rule.categoryKey) ? categoryLastRank.get(rule.categoryKey)! + 1 : rule.rank;
+      categoryLastRank.set(rule.categoryKey, effectiveRank);
       const leaderboard = buildLeaderboard(members, categoryValues, rule.categoryKey, weekNumber);
-      result = resolvePassenger(leaderboard, rule.rank, isAvailable, settings.autoResolveCollisions);
+      result = resolvePassenger(leaderboard, effectiveRank, isAvailable, settings.autoResolveCollisions);
     }
 
     if (result.memberId !== null) usedPassengerMemberIds.add(result.memberId);
@@ -203,7 +210,7 @@ export async function overrideSlot(
   roundId: number,
   slotIndex: number,
   role: "conductor" | "passenger",
-  input: { memberId?: number; sourceRank?: number }
+  input: { memberId?: number; sourceRank?: number; sourceCategoryKey?: string | null }
 ): Promise<{ ok: true; slot: DraftSlot } | { ok: false; error: string }> {
   const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
   if (!round) return { ok: false, error: "Round not found." };
@@ -228,6 +235,31 @@ export async function overrideSlot(
     } else {
       sourceCategoryKey = null;
       sourceRank = null;
+    }
+  } else if (input.sourceCategoryKey !== undefined && role === "passenger") {
+    const settings = await getConductorSettings();
+    const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
+    const usedElsewhere = new Set(
+      round.selections
+        .filter((s) => s.role === "passenger" && s.slotIndex !== slotIndex && s.memberId !== null)
+        .map((s) => s.memberId as number)
+    );
+    const isAvailable = (candidateId: number) =>
+      candidateId !== conductorSlot?.memberId && (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
+
+    if (input.sourceCategoryKey === null) {
+      const pool = members.map((m) => m.id).filter(isAvailable);
+      memberId = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+      sourceCategoryKey = null;
+      sourceRank = null;
+    } else {
+      const categoryValues = await getConductorCategoryWeekValues();
+      const leaderboard = buildLeaderboard(members, categoryValues, input.sourceCategoryKey, existing.weekNumber);
+      const requestedRank = existing.sourceRank ?? 1;
+      const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+      sourceCategoryKey = input.sourceCategoryKey;
+      memberId = result.memberId;
+      sourceRank = result.sourceRank ?? requestedRank;
     }
   } else if (input.sourceRank !== undefined && role === "passenger" && existing.sourceCategoryKey) {
     const settings = await getConductorSettings();
@@ -266,6 +298,61 @@ export async function overrideSlot(
       manualOverride: updated.manualOverride,
       collision: updated.memberId === null,
       collisionReason: updated.memberId === null ? "No member assigned." : null,
+    },
+  };
+}
+
+/** Re-randomizes one Random-rule Passenger slot only, leaving every other slot in the round untouched. */
+export async function rerollPassengerSlot(
+  roundId: number,
+  slotIndex: number
+): Promise<{ ok: true; slot: DraftSlot } | { ok: false; error: string }> {
+  const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
+  if (!round) return { ok: false, error: "Round not found." };
+  if (round.status !== "draft") return { ok: false, error: "Only draft rounds can be edited." };
+
+  const existing = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "passenger");
+  if (!existing) return { ok: false, error: "Slot not found." };
+  if (existing.sourceCategoryKey) return { ok: false, error: "Only Random slots can be rerolled - this one is field-based." };
+
+  const [settings, members] = await Promise.all([getConductorSettings(), prisma.member.findMany({ where: { isActive: true } })]);
+  const memberNameById = new Map(members.map((m) => [m.id, m.name]));
+
+  const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
+  const usedElsewhere = new Set(
+    round.selections
+      .filter((s) => s.role === "passenger" && s.slotIndex !== slotIndex && s.memberId !== null)
+      .map((s) => s.memberId as number)
+  );
+  const isAvailable = (candidateId: number) =>
+    candidateId !== conductorSlot?.memberId && (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
+
+  const pool = members.map((m) => m.id).filter(isAvailable);
+  // Prefer a genuinely different pick from what's already there, when another option exists.
+  const freshPool = pool.filter((id) => id !== existing.memberId);
+  const finalPool = freshPool.length > 0 ? freshPool : pool;
+  const memberId = finalPool.length > 0 ? finalPool[Math.floor(Math.random() * finalPool.length)] : null;
+
+  const updated = await prisma.conductorSelection.update({
+    where: { id: existing.id },
+    data: { memberId, manualOverride: true },
+  });
+
+  return {
+    ok: true,
+    slot: {
+      slotIndex: updated.slotIndex,
+      weekday: weekdayForSlot(updated.slotIndex),
+      weekNumber: updated.weekNumber,
+      role: "passenger",
+      memberId: updated.memberId,
+      memberName: updated.memberId !== null ? (memberNameById.get(updated.memberId) ?? null) : null,
+      pointsAtSelection: updated.pointsAtSelection,
+      sourceCategoryKey: updated.sourceCategoryKey,
+      sourceRank: updated.sourceRank,
+      manualOverride: updated.manualOverride,
+      collision: updated.memberId === null,
+      collisionReason: updated.memberId === null ? "No eligible member available for Random." : null,
     },
   };
 }

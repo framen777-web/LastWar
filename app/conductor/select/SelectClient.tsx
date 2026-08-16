@@ -22,6 +22,9 @@ type DraftSlot = {
 };
 
 type Round = { id: number; weeksInCycle: number; startWeek: number; status: string };
+type Category = { key: string; name: string };
+
+const RANDOM_VALUE = "__random__";
 
 const WEEKDAY_LABELS: Record<string, string> = {
   monday: "Monday",
@@ -55,11 +58,13 @@ export function SelectClient({
   defaultWeeksInCycle,
   defaultStartWeek,
   members,
+  categories,
 }: {
   isAdmin: boolean;
   defaultWeeksInCycle: number;
   defaultStartWeek: number;
   members: { id: number; name: string }[];
+  categories: Category[];
 }) {
   const [weeksInCycle, setWeeksInCycle] = useState(defaultWeeksInCycle);
   const [startWeek, setStartWeek] = useState(defaultStartWeek);
@@ -117,6 +122,32 @@ export function SelectClient({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, sourceRank }),
+    });
+    await refetchRound(round.id);
+    setPendingSlot(null);
+  }
+
+  async function handleOverrideCategory(slot: DraftSlot, categoryKey: string | null) {
+    if (!round) return;
+    const key = `${slot.slotIndex}:${slot.role}`;
+    setPendingSlot(key);
+    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, sourceCategoryKey: categoryKey }),
+    });
+    await refetchRound(round.id);
+    setPendingSlot(null);
+  }
+
+  async function handleReroll(slot: DraftSlot) {
+    if (!round) return;
+    const key = `${slot.slotIndex}:${slot.role}`;
+    setPendingSlot(key);
+    await fetch(`/api/conductor/rounds/${round.id}/slots`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotIndex: slot.slotIndex, role: slot.role, reroll: true }),
     });
     await refetchRound(round.id);
     setPendingSlot(null);
@@ -191,10 +222,13 @@ export function SelectClient({
           <CombinedSlotTable
             slots={slots}
             members={members}
+            categories={categories}
             editable={isAdmin && isDraft}
             pendingSlot={pendingSlot}
             onOverrideMember={handleOverrideMember}
             onOverrideRank={handleOverrideRank}
+            onOverrideCategory={handleOverrideCategory}
+            onReroll={handleReroll}
           />
 
           {isDraft && isAdmin && (
@@ -228,19 +262,34 @@ export function SelectClient({
 function CombinedSlotTable({
   slots,
   members,
+  categories,
   editable,
   pendingSlot,
   onOverrideMember,
   onOverrideRank,
+  onOverrideCategory,
+  onReroll,
 }: {
   slots: DraftSlot[];
   members: { id: number; name: string }[];
+  categories: Category[];
   editable: boolean;
   pendingSlot: string | null;
   onOverrideMember: (slot: DraftSlot, memberId: number) => void;
   onOverrideRank: (slot: DraftSlot, rank: number) => void;
+  onOverrideCategory: (slot: DraftSlot, categoryKey: string | null) => void;
+  onReroll: (slot: DraftSlot) => void;
 }) {
   const slotIndexes = Array.from(new Set(slots.map((s) => s.slotIndex))).sort((a, b) => a - b);
+
+  // Flags any member picked in more than one slot across the whole round (either role) so
+  // it's easy to spot at a glance, whether that's intentional or a mistake.
+  const memberCounts = new Map<number, number>();
+  for (const s of slots) {
+    if (s.memberId === null) continue;
+    memberCounts.set(s.memberId, (memberCounts.get(s.memberId) ?? 0) + 1);
+  }
+  const duplicateMemberIds = new Set([...memberCounts.entries()].filter(([, count]) => count > 1).map(([id]) => id));
 
   return (
     <div className="border border-neutral-200 rounded overflow-hidden overflow-x-auto max-w-4xl">
@@ -262,6 +311,7 @@ function CombinedSlotTable({
             const weekday = conductor?.weekday ?? passenger?.weekday ?? "";
             const weekNumber = conductor?.weekNumber ?? passenger?.weekNumber ?? "";
             const rowHasCollision = conductor?.collision || passenger?.collision;
+            const pendingPassenger = pendingSlot === `${slotIndex}:passenger`;
 
             return (
               <tr key={slotIndex} className={`border-b border-neutral-100 ${rowHasCollision ? "bg-amber-50" : ""}`}>
@@ -275,6 +325,7 @@ function CombinedSlotTable({
                       editable={editable}
                       pendingSlot={pendingSlot}
                       onOverrideMember={onOverrideMember}
+                      isDuplicate={conductor.memberId !== null && duplicateMemberIds.has(conductor.memberId)}
                     />
                   )}
                 </td>
@@ -287,29 +338,62 @@ function CombinedSlotTable({
                       editable={editable}
                       pendingSlot={pendingSlot}
                       onOverrideMember={onOverrideMember}
+                      isDuplicate={passenger.memberId !== null && duplicateMemberIds.has(passenger.memberId)}
                     />
                   )}
                 </td>
                 <td className="py-1.5 px-3 text-neutral-600 whitespace-nowrap">
-                  {passenger?.sourceCategoryKey ? (
+                  {passenger && (
                     <span className="inline-flex items-center gap-1">
-                      {passenger.sourceCategoryKey}
                       {editable ? (
-                        <input
-                          type="number"
-                          min={1}
-                          disabled={pendingSlot === `${passenger.slotIndex}:passenger`}
-                          defaultValue={passenger.sourceRank ?? 1}
-                          onBlur={(e) => onOverrideRank(passenger, Number(e.target.value) || 1)}
-                          title="Changing this cascades to every other Passenger slot with the same field"
-                          className="border border-neutral-300 rounded px-1 py-0.5 text-xs w-14"
-                        />
+                        <select
+                          value={passenger.sourceCategoryKey ?? RANDOM_VALUE}
+                          disabled={pendingPassenger}
+                          onChange={(e) =>
+                            onOverrideCategory(passenger, e.target.value === RANDOM_VALUE ? null : e.target.value)
+                          }
+                          title="Which day gets which field is set in Conductor Settings - this overrides just this one slot"
+                          className="border border-neutral-300 rounded px-1 py-0.5 text-xs"
+                        >
+                          <option value={RANDOM_VALUE}>Random</option>
+                          {categories.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
-                        `#${passenger.sourceRank}`
+                        (categories.find((c) => c.key === passenger.sourceCategoryKey)?.name ?? passenger.sourceCategoryKey ?? "Random")
+                      )}
+
+                      {passenger.sourceCategoryKey ? (
+                        editable ? (
+                          <input
+                            type="number"
+                            min={1}
+                            disabled={pendingPassenger}
+                            defaultValue={passenger.sourceRank ?? 1}
+                            onBlur={(e) => onOverrideRank(passenger, Number(e.target.value) || 1)}
+                            title="Changing this cascades to every other Passenger slot with the same field"
+                            className="border border-neutral-300 rounded px-1 py-0.5 text-xs w-14"
+                          />
+                        ) : (
+                          `#${passenger.sourceRank}`
+                        )
+                      ) : (
+                        editable && (
+                          <button
+                            type="button"
+                            onClick={() => onReroll(passenger)}
+                            disabled={pendingPassenger}
+                            title="Pick a new random member for just this slot"
+                            className="border border-neutral-300 rounded px-1.5 py-0.5 text-xs disabled:opacity-50"
+                          >
+                            🎲 Reroll
+                          </button>
+                        )
                       )}
                     </span>
-                  ) : (
-                    "Random"
                   )}
                 </td>
               </tr>
@@ -327,15 +411,19 @@ function MemberCell({
   editable,
   pendingSlot,
   onOverrideMember,
+  isDuplicate,
 }: {
   slot: DraftSlot;
   members: { id: number; name: string }[];
   editable: boolean;
   pendingSlot: string | null;
   onOverrideMember: (slot: DraftSlot, memberId: number) => void;
+  isDuplicate: boolean;
 }) {
   const key = `${slot.slotIndex}:${slot.role}`;
   const pending = pendingSlot === key;
+
+  const duplicateClass = isDuplicate ? "bg-red-50 ring-1 ring-red-300 rounded px-1" : "";
 
   return (
     <>
@@ -344,7 +432,8 @@ function MemberCell({
           value={slot.memberId ?? ""}
           disabled={pending}
           onChange={(e) => onOverrideMember(slot, Number(e.target.value))}
-          className="border border-neutral-300 rounded px-1.5 py-0.5 text-xs"
+          title={isDuplicate ? "This member is selected in more than one slot this round" : undefined}
+          className={`border border-neutral-300 rounded px-1.5 py-0.5 text-xs ${isDuplicate ? "ring-1 ring-red-400 bg-red-50" : ""}`}
         >
           <option value="" disabled>
             Select…
@@ -356,7 +445,12 @@ function MemberCell({
           ))}
         </select>
       ) : (
-        (slot.memberName ?? "—")
+        <span
+          title={isDuplicate ? "This member is selected in more than one slot this round" : undefined}
+          className={duplicateClass}
+        >
+          {slot.memberName ?? "—"}
+        </span>
       )}
       {slot.collision && <div className="text-amber-700 text-xs mt-0.5">{slot.collisionReason}</div>}
     </>
