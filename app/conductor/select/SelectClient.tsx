@@ -136,8 +136,6 @@ export function SelectClient({
     await refetchRound(round.id);
   }
 
-  const conductorSlots = slots.filter((s) => s.role === "conductor").sort((a, b) => a.slotIndex - b.slotIndex);
-  const passengerSlots = slots.filter((s) => s.role === "passenger").sort((a, b) => a.slotIndex - b.slotIndex);
   const isDraft = round?.status === "draft";
   const hasCollisions = slots.some((s) => s.collision);
 
@@ -190,25 +188,13 @@ export function SelectClient({
             {hasCollisions && isDraft && <span className="text-amber-600 ml-2">Some slots need attention before confirming.</span>}
           </p>
 
-          <SlotTable
-            title="Conductors"
-            slots={conductorSlots}
-            members={members}
-            editable={isAdmin && isDraft}
-            pendingSlot={pendingSlot}
-            onOverrideMember={handleOverrideMember}
-            valueColumn="points"
-          />
-
-          <SlotTable
-            title="Passengers"
-            slots={passengerSlots}
+          <CombinedSlotTable
+            slots={slots}
             members={members}
             editable={isAdmin && isDraft}
             pendingSlot={pendingSlot}
             onOverrideMember={handleOverrideMember}
             onOverrideRank={handleOverrideRank}
-            valueColumn="source"
           />
 
           {isDraft && isAdmin && (
@@ -239,89 +225,92 @@ export function SelectClient({
   );
 }
 
-function SlotTable({
-  title,
+function CombinedSlotTable({
   slots,
   members,
   editable,
   pendingSlot,
   onOverrideMember,
   onOverrideRank,
-  valueColumn,
 }: {
-  title: string;
   slots: DraftSlot[];
   members: { id: number; name: string }[];
   editable: boolean;
   pendingSlot: string | null;
   onOverrideMember: (slot: DraftSlot, memberId: number) => void;
-  onOverrideRank?: (slot: DraftSlot, rank: number) => void;
-  valueColumn: "points" | "source";
+  onOverrideRank: (slot: DraftSlot, rank: number) => void;
 }) {
+  const slotIndexes = Array.from(new Set(slots.map((s) => s.slotIndex))).sort((a, b) => a - b);
+
   return (
-    <div className="border border-neutral-200 rounded overflow-hidden max-w-2xl">
-      <div className="bg-neutral-100 px-3 py-1 font-semibold">{title}</div>
+    <div className="border border-neutral-200 rounded overflow-hidden overflow-x-auto max-w-4xl">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b border-neutral-200 text-left">
+          <tr className="border-b border-neutral-200 text-left bg-neutral-50">
             <th className="py-1.5 px-3">Day</th>
             <th className="py-1.5 px-3">Week</th>
-            <th className="py-1.5 px-3">Member</th>
-            <th className="py-1.5 px-3">{valueColumn === "points" ? "Points" : "Field / Rank"}</th>
+            <th className="py-1.5 px-3">Conductor</th>
+            <th className="py-1.5 px-3">Points</th>
+            <th className="py-1.5 px-3">Passenger</th>
+            <th className="py-1.5 px-3">Field / Rank</th>
           </tr>
         </thead>
         <tbody>
-          {slots.map((slot) => {
-            const key = `${slot.slotIndex}:${slot.role}`;
-            const pending = pendingSlot === key;
+          {slotIndexes.map((slotIndex) => {
+            const conductor = slots.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
+            const passenger = slots.find((s) => s.slotIndex === slotIndex && s.role === "passenger");
+            const weekday = conductor?.weekday ?? passenger?.weekday ?? "";
+            const weekNumber = conductor?.weekNumber ?? passenger?.weekNumber ?? "";
+            const rowHasCollision = conductor?.collision || passenger?.collision;
+
             return (
-              <tr key={key} className={`border-b border-neutral-100 ${slot.collision ? "bg-amber-50" : ""}`}>
-                <td className="py-1.5 px-3 capitalize">{WEEKDAY_LABELS[slot.weekday] ?? slot.weekday}</td>
-                <td className="py-1.5 px-3 text-neutral-500">{slot.weekNumber}</td>
+              <tr key={slotIndex} className={`border-b border-neutral-100 ${rowHasCollision ? "bg-amber-50" : ""}`}>
+                <td className="py-1.5 px-3 capitalize whitespace-nowrap">{WEEKDAY_LABELS[weekday] ?? weekday}</td>
+                <td className="py-1.5 px-3 text-neutral-500">{weekNumber}</td>
                 <td className="py-1.5 px-3">
-                  {editable ? (
-                    <select
-                      value={slot.memberId ?? ""}
-                      disabled={pending}
-                      onChange={(e) => onOverrideMember(slot, Number(e.target.value))}
-                      className="border border-neutral-300 rounded px-1.5 py-0.5 text-xs"
-                    >
-                      <option value="" disabled>
-                        Select…
-                      </option>
-                      {members.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    (slot.memberName ?? "—")
+                  {conductor && (
+                    <MemberCell
+                      slot={conductor}
+                      members={members}
+                      editable={editable}
+                      pendingSlot={pendingSlot}
+                      onOverrideMember={onOverrideMember}
+                    />
                   )}
-                  {slot.collision && <div className="text-amber-700 text-xs mt-0.5">{slot.collisionReason}</div>}
                 </td>
-                <td className="py-1.5 px-3 text-neutral-600">
-                  {valueColumn === "points"
-                    ? (slot.pointsAtSelection?.toFixed(2) ?? "—")
-                    : slot.sourceCategoryKey
-                      ? (
-                        <span className="inline-flex items-center gap-1">
-                          {slot.sourceCategoryKey}
-                          {editable && onOverrideRank ? (
-                            <input
-                              type="number"
-                              min={1}
-                              disabled={pending}
-                              defaultValue={slot.sourceRank ?? 1}
-                              onBlur={(e) => onOverrideRank(slot, Number(e.target.value) || 1)}
-                              className="border border-neutral-300 rounded px-1 py-0.5 text-xs w-14"
-                            />
-                          ) : (
-                            `#${slot.sourceRank}`
-                          )}
-                        </span>
-                      )
-                      : "Random"}
+                <td className="py-1.5 px-3 text-neutral-600 whitespace-nowrap">{conductor?.pointsAtSelection?.toFixed(2) ?? "—"}</td>
+                <td className="py-1.5 px-3">
+                  {passenger && (
+                    <MemberCell
+                      slot={passenger}
+                      members={members}
+                      editable={editable}
+                      pendingSlot={pendingSlot}
+                      onOverrideMember={onOverrideMember}
+                    />
+                  )}
+                </td>
+                <td className="py-1.5 px-3 text-neutral-600 whitespace-nowrap">
+                  {passenger?.sourceCategoryKey ? (
+                    <span className="inline-flex items-center gap-1">
+                      {passenger.sourceCategoryKey}
+                      {editable ? (
+                        <input
+                          type="number"
+                          min={1}
+                          disabled={pendingSlot === `${passenger.slotIndex}:passenger`}
+                          defaultValue={passenger.sourceRank ?? 1}
+                          onBlur={(e) => onOverrideRank(passenger, Number(e.target.value) || 1)}
+                          title="Changing this cascades to every other Passenger slot with the same field"
+                          className="border border-neutral-300 rounded px-1 py-0.5 text-xs w-14"
+                        />
+                      ) : (
+                        `#${passenger.sourceRank}`
+                      )}
+                    </span>
+                  ) : (
+                    "Random"
+                  )}
                 </td>
               </tr>
             );
@@ -329,5 +318,47 @@ function SlotTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function MemberCell({
+  slot,
+  members,
+  editable,
+  pendingSlot,
+  onOverrideMember,
+}: {
+  slot: DraftSlot;
+  members: { id: number; name: string }[];
+  editable: boolean;
+  pendingSlot: string | null;
+  onOverrideMember: (slot: DraftSlot, memberId: number) => void;
+}) {
+  const key = `${slot.slotIndex}:${slot.role}`;
+  const pending = pendingSlot === key;
+
+  return (
+    <>
+      {editable ? (
+        <select
+          value={slot.memberId ?? ""}
+          disabled={pending}
+          onChange={(e) => onOverrideMember(slot, Number(e.target.value))}
+          className="border border-neutral-300 rounded px-1.5 py-0.5 text-xs"
+        >
+          <option value="" disabled>
+            Select…
+          </option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        (slot.memberName ?? "—")
+      )}
+      {slot.collision && <div className="text-amber-700 text-xs mt-0.5">{slot.collisionReason}</div>}
+    </>
   );
 }

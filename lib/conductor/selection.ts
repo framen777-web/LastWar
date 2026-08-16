@@ -270,6 +270,76 @@ export async function overrideSlot(
   };
 }
 
+/**
+ * Overriding a category-based Passenger's rank cascades: every other Passenger slot in
+ * this round sharing the same category gets re-ranked in chronological order relative to
+ * the changed slot, so a fixed top-ranked member isn't picked again for every later
+ * occurrence of that category. E.g. setting the first "vs" Passenger to rank 1 pushes the
+ * next "vs" Passenger to rank 2, the one after to rank 3, and so on - each occurrence still
+ * resolved against *its own* week's leaderboard (a category can repeat across weeks in a
+ * multi-week cycle), just walking one rank deeper each time.
+ */
+export async function overrideSlotRankCascade(
+  roundId: number,
+  slotIndex: number,
+  sourceRank: number
+): Promise<{ ok: true; slots: DraftSlot[] } | { ok: false; error: string }> {
+  const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
+  if (!round) return { ok: false, error: "Round not found." };
+  if (round.status !== "draft") return { ok: false, error: "Only draft rounds can be edited." };
+
+  const changed = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "passenger");
+  if (!changed) return { ok: false, error: "Slot not found." };
+  if (!changed.sourceCategoryKey) return { ok: false, error: "This slot is Random, not category-based - there's no rank to cascade." };
+
+  const sameCategory = round.selections
+    .filter((s) => s.role === "passenger" && s.sourceCategoryKey === changed.sourceCategoryKey)
+    .sort((a, b) => a.slotIndex - b.slotIndex);
+  const changedPos = sameCategory.findIndex((s) => s.slotIndex === slotIndex);
+
+  const [settings, categoryValues, members] = await Promise.all([
+    getConductorSettings(),
+    getConductorCategoryWeekValues(),
+    prisma.member.findMany({ where: { isActive: true } }),
+  ]);
+
+  const conductorMemberBySlot = new Map(round.selections.filter((s) => s.role === "conductor").map((s) => [s.slotIndex, s.memberId]));
+  // Passengers picked for a *different* category stay fixed - only this category's own
+  // occurrences get walked and re-resolved.
+  const usedElsewhere = new Set(
+    round.selections
+      .filter((s) => s.role === "passenger" && s.sourceCategoryKey !== changed.sourceCategoryKey && s.memberId !== null)
+      .map((s) => s.memberId as number)
+  );
+  const usedInGroup = new Set<number>();
+
+  const updates: { id: number; memberId: number | null; sourceRank: number | null }[] = [];
+  for (let p = 0; p < sameCategory.length; p++) {
+    const slot = sameCategory[p];
+    const requestedRank = Math.max(1, sourceRank + (p - changedPos));
+    const leaderboard = buildLeaderboard(members, categoryValues, changed.sourceCategoryKey, slot.weekNumber);
+    const isAvailable = (candidateId: number) =>
+      candidateId !== conductorMemberBySlot.get(slot.slotIndex) &&
+      !usedElsewhere.has(candidateId) &&
+      (settings.allowDuplicatePassengers || !usedInGroup.has(candidateId));
+    const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+    if (result.memberId !== null) usedInGroup.add(result.memberId);
+    updates.push({ id: slot.id, memberId: result.memberId, sourceRank: result.sourceRank ?? requestedRank });
+  }
+
+  await prisma.$transaction(
+    updates.map((u) =>
+      prisma.conductorSelection.update({
+        where: { id: u.id },
+        data: { memberId: u.memberId, sourceRank: u.sourceRank, manualOverride: true },
+      })
+    )
+  );
+
+  const reloaded = await getRoundSlots(roundId);
+  return reloaded ? { ok: true, slots: reloaded.slots } : { ok: false, error: "Failed to reload round after cascading." };
+}
+
 /** Re-validates the hard rules against the round's current (possibly overridden) state, then finalizes it. */
 export async function confirmRound(roundId: number): Promise<{ ok: true } | { ok: false; error: string }> {
   const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
