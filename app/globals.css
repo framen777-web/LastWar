@@ -15,10 +15,71 @@
   --color-accent: var(--color-neutral-900);
   --color-accent-contrast: #ffffff;
   --color-surface-raised: #ffffff;
+
+  /*
+   * Menu-card/icon/title tokens - defaults here derive a sensible value for every
+   * existing theme above from tokens they already define, so none of them need editing.
+   * The six new themes below override these explicitly with their own designed palette.
+   */
+  --color-card: var(--color-surface-raised);
+  --color-card-border: var(--color-neutral-200);
+  --color-card-hover: var(--color-neutral-50);
+  --color-card-hover-border: var(--color-neutral-400);
+  --color-card-hover-shadow: var(--color-accent);
+  --color-icon-bg: var(--color-accent);
+  --color-icon-bg-alt: var(--color-accent);
+  --color-icon-fg: var(--color-accent-contrast);
+  --color-title: var(--color-neutral-900);
+  --title-gradient: linear-gradient(var(--color-title), var(--color-title));
+  --color-nav-link: var(--color-accent);
 }
 
 body {
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/*
+ * Menu card: resting/hover/focus-visible styling driven entirely by the tokens above (plus
+ * an optional per-instance --card-accent override for per-card-accent themes - see
+ * components/MenuButton.tsx). Kept as a hand-written class rather than Tailwind's
+ * auto-generated color utilities because a card needs four distinct colors (resting bg/
+ * border, hover bg/border) where Tailwind's @theme convention gives one utility per token.
+ */
+.menu-card {
+  background-color: var(--color-card);
+  border-color: var(--color-card-border);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.menu-card:hover,
+.menu-card:focus-visible {
+  background-color: var(--color-card-hover);
+  border-color: var(--card-accent, var(--color-card-hover-border));
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--card-accent, var(--color-card-hover-shadow)) 45%, transparent);
+}
+
+.menu-card-icon {
+  color: var(--color-icon-fg);
+}
+
+/* App title: gradient themes set --title-gradient to a real two-stop gradient; every other
+   theme sets it to a flat "gradient" of --color-title twice, so this one rule handles both
+   cases uniformly. The plain `color` above is the fallback for any context that doesn't
+   support background-clip: text (e.g. some email/PDF renderers), per acceptance criteria. */
+.app-title {
+  color: var(--color-title);
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .app-title {
+    background: var(--title-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
 [data-theme="midnight"] {
@@ -104,4 +165,208 @@ body {
   --color-accent: #ffd23f;
   --color-accent-contrast: #000000;
   --color-surface-raised: #0a0a0a;
+}
+
+/* ---- New presets below (Alliance Stats theme spec) ---- */
+
+[data-theme="ember-dark"] {
+  --color-neutral-50: #14100d;
+  --color-neutral-100: #1c1611;
+  --color-neutral-200: #2e2118;
+  --color-neutral-300: #33261a;
+  --color-neutral-400: #867563;
+  --color-neutral-500: #d8c3ab;
+  --color-neutral-600: #decdb9;
+  --color-neutral-700: #e5d6c7;
+  --color-neutral-800: #ebe0d4;
+  --color-neutral-900: #f1e9e2;
+  --color-neutral-950: #f7f3f0;
+  --color-accent: #ffb454;
+  --color-accent-contrast: #1a0f05;
+  --color-surface-raised: #1c1611;
+
+  --color-card: #1f1811;
+  --color-card-border: #33261a;
+  --color-card-hover: #271e15;
+  --color-card-hover-border: #ff9f3f;
+  --color-card-hover-shadow: #ff9f3f;
+  --color-icon-bg: linear-gradient(145deg, #ff9f3f, #e0632a);
+  --color-icon-bg-alt: linear-gradient(145deg, #ff9f3f, #e0632a);
+  --color-icon-fg: #1a0f05;
+  --color-title: #ffb454;
+  --title-gradient: linear-gradient(90deg, #ffb454, #ffb454);
+  --color-nav-link: #ffb454;
+}
+
+[data-theme="vibrant"] {
+  --color-neutral-50: #101317;
+  --color-neutral-100: #171b21;
+  --color-neutral-200: #232933;
+  --color-neutral-300: #262c35;
+  --color-neutral-400: #676e78;
+  --color-neutral-500: #a7afba;
+  --color-neutral-600: #b9c0c9;
+  --color-neutral-700: #cbd0d7;
+  --color-neutral-800: #dce1e6;
+  --color-neutral-900: #eef1f4;
+  --color-neutral-950: #ffffff;
+  --color-accent: #7dd3fc;
+  --color-accent-contrast: #0b1420;
+  --color-surface-raised: #171b21;
+
+  --color-card: #171b21;
+  --color-card-border: #232933;
+  --color-card-hover: #1c222b;
+  --color-card-hover-border: #7dd3fc;
+  --color-card-hover-shadow: #7dd3fc;
+  --color-icon-bg: #7dd3fc;
+  --color-icon-bg-alt: #7dd3fc;
+  --color-icon-fg: #0b1420;
+  --color-title: #ffffff;
+  --title-gradient: linear-gradient(90deg, #ffffff, #ffffff);
+  --color-nav-link: #7dd3fc;
+
+  /* Per-card accents (icon chip bg is the accent at ~13% opacity; icon fg and the card's
+     hover border use the full-opacity accent - see components/MenuButton.tsx). */
+  --menu-accent-detail-list: #2dd4bf;
+  --menu-accent-detail-list-bg: #2dd4bf22;
+  --menu-accent-uploads: #a78bfa;
+  --menu-accent-uploads-bg: #a78bfa22;
+  --menu-accent-eow-reports: #fbbf24;
+  --menu-accent-eow-reports-bg: #fbbf2422;
+  --menu-accent-conductor: #fb7185;
+  --menu-accent-conductor-bg: #fb718522;
+  --menu-accent-reports: #60a5fa;
+  --menu-accent-reports-bg: #60a5fa22;
+  --menu-accent-settings: #4ade80;
+  --menu-accent-settings-bg: #4ade8022;
+}
+
+[data-theme="deep-jewel"] {
+  --color-neutral-50: #0f1420;
+  --color-neutral-100: #151b2c;
+  --color-neutral-200: #232c44;
+  --color-neutral-300: #232c44;
+  --color-neutral-400: #616e8a;
+  --color-neutral-500: #9fb0cf;
+  --color-neutral-600: #b2bfd9;
+  --color-neutral-700: #c4cfe3;
+  --color-neutral-800: #d7deec;
+  --color-neutral-900: #e9edf6;
+  --color-neutral-950: #fcfcff;
+  --color-accent: #22d3ee;
+  --color-accent-contrast: #0b0f1a;
+  --color-surface-raised: #151b2c;
+
+  --color-card: #151b2c;
+  --color-card-border: #232c44;
+  --color-card-hover: #1a2138;
+  --color-card-hover-border: #22d3ee;
+  --color-card-hover-shadow: #22d3ee;
+  --color-icon-bg: linear-gradient(145deg, #22d3ee, #7c3aed);
+  --color-icon-bg-alt: linear-gradient(145deg, #f472b6, #7c3aed);
+  --color-icon-fg: #0b0f1a;
+  --color-title: #22d3ee;
+  --title-gradient: linear-gradient(90deg, #22d3ee, #c084fc);
+  --color-nav-link: #22d3ee;
+}
+
+[data-theme="autumn-ember"] {
+  --color-neutral-50: #f7ecd7;
+  --color-neutral-100: #efe0c0;
+  --color-neutral-200: #e6d3ad;
+  --color-neutral-300: #dcc494;
+  --color-neutral-400: #a48e6b;
+  --color-neutral-500: #6b5842;
+  --color-neutral-600: #5f4d39;
+  --color-neutral-700: #53412f;
+  --color-neutral-800: #473626;
+  --color-neutral-900: #3b2a1c;
+  --color-neutral-950: #2a1e14;
+  --color-accent: #a8340a;
+  --color-accent-contrast: #fff8ee;
+  --color-surface-raised: #efe0c0;
+
+  --color-card: #fffaf0;
+  --color-card-border: #e6d3ad;
+  --color-card-hover: #fff3e2;
+  --color-card-hover-border: #a8340a;
+  --color-card-hover-shadow: #a8340a;
+  --color-icon-bg: linear-gradient(145deg, #e2793a, #a8340a);
+  --color-icon-bg-alt: linear-gradient(145deg, #e2793a, #a8340a);
+  --color-icon-fg: #fff8ee;
+  --color-title: #a8340a;
+  --title-gradient: linear-gradient(90deg, #a8340a, #a8340a);
+  --color-nav-link: #a8340a;
+}
+
+[data-theme="harvest"] {
+  --color-neutral-50: #f8ecd8;
+  --color-neutral-100: #efe0c0;
+  --color-neutral-200: #e6d3ad;
+  --color-neutral-300: #dcc494;
+  --color-neutral-400: #a48e6b;
+  --color-neutral-500: #6b5842;
+  --color-neutral-600: #5f4d39;
+  --color-neutral-700: #53412f;
+  --color-neutral-800: #473626;
+  --color-neutral-900: #3b2a1c;
+  --color-neutral-950: #2a1e14;
+  --color-accent: #a1543a;
+  --color-accent-contrast: #fff8ee;
+  --color-surface-raised: #efe0c0;
+
+  --color-card: #fffaf0;
+  --color-card-border: #e6d3ad;
+  --color-card-hover: #fff3e2;
+  --color-card-hover-border: #a1543a;
+  --color-card-hover-shadow: #a1543a;
+  --color-icon-bg: #a1543a;
+  --color-icon-bg-alt: #a1543a;
+  --color-icon-fg: #fff8ee;
+  --color-title: #3b2a1c;
+  --title-gradient: linear-gradient(90deg, #3b2a1c, #3b2a1c);
+  --color-nav-link: #a1543a;
+
+  --menu-accent-detail-list: #a8340a;
+  --menu-accent-detail-list-bg: #a8340a1f;
+  --menu-accent-uploads: #8a5f0c;
+  --menu-accent-uploads-bg: #8a5f0c1f;
+  --menu-accent-eow-reports: #5f6b31;
+  --menu-accent-eow-reports-bg: #5f6b311f;
+  --menu-accent-conductor: #a1543a;
+  --menu-accent-conductor-bg: #a1543a1f;
+  --menu-accent-reports: #8f5a0d;
+  --menu-accent-reports-bg: #8f5a0d1f;
+  --menu-accent-settings: #8a3b12;
+  --menu-accent-settings-bg: #8a3b121f;
+}
+
+[data-theme="autumn-gradient"] {
+  --color-neutral-50: #f7ead2;
+  --color-neutral-100: #eeddb8;
+  --color-neutral-200: #e3cc9d;
+  --color-neutral-300: #d9c093;
+  --color-neutral-400: #a28c6b;
+  --color-neutral-500: #6b5842;
+  --color-neutral-600: #5f4d39;
+  --color-neutral-700: #53412f;
+  --color-neutral-800: #473626;
+  --color-neutral-900: #3b2a1c;
+  --color-neutral-950: #2a1e14;
+  --color-accent: #a8340a;
+  --color-accent-contrast: #fff8ee;
+  --color-surface-raised: #eeddb8;
+
+  --color-card: #fff8e9;
+  --color-card-border: #e3cc9d;
+  --color-card-hover: #fdf0d8;
+  --color-card-hover-border: #c1440e;
+  --color-card-hover-shadow: #c1440e;
+  --color-icon-bg: linear-gradient(145deg, #e2793a, #a8340a);
+  --color-icon-bg-alt: linear-gradient(145deg, #c98a1f, #5f6b31);
+  --color-icon-fg: #fff8ee;
+  --color-title: #a8340a;
+  --title-gradient: linear-gradient(90deg, #a8340a, #c98a1f);
+  --color-nav-link: #a8340a;
 }

@@ -40,6 +40,36 @@ export const THEMES: ThemeDef[] = [
     isAccessibilityOption: true,
     preview: { surface: "#000000", raised: "#0A0A0A", text: "#FFFFFF", accent: "#FFD23F" },
   },
+  {
+    key: "ember-dark",
+    label: "Ember Dark",
+    preview: { surface: "#1C1611", raised: "#1F1811", text: "#F1E9E2", accent: "#FFB454" },
+  },
+  {
+    key: "vibrant",
+    label: "Vibrant Dashboard",
+    preview: { surface: "#171B21", raised: "#171B21", text: "#EEF1F4", accent: "#7DD3FC" },
+  },
+  {
+    key: "deep-jewel",
+    label: "Deep Jewel",
+    preview: { surface: "#151B2C", raised: "#151B2C", text: "#E9EDF6", accent: "#22D3EE" },
+  },
+  {
+    key: "autumn-ember",
+    label: "Autumn Ember",
+    preview: { surface: "#EFE0C0", raised: "#FFFAF0", text: "#3B2A1C", accent: "#A8340A" },
+  },
+  {
+    key: "harvest",
+    label: "Harvest Dashboard",
+    preview: { surface: "#EFE0C0", raised: "#FFFAF0", text: "#3B2A1C", accent: "#A1543A" },
+  },
+  {
+    key: "autumn-gradient",
+    label: "Autumn Gradient",
+    preview: { surface: "#EEDDB8", raised: "#FFF8E9", text: "#3B2A1C", accent: "#A8340A" },
+  },
 ];
 
 export function isValidTheme(key: string): boolean {

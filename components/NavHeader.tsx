@@ -56,7 +56,7 @@ export function NavHeader({ user }: { user: NavUser }) {
             </button>
           )}
         </div>
-        <Link href="/" onNavigate={guardedNavigate} className="font-semibold text-sm">
+        <Link href="/" onNavigate={guardedNavigate} className="app-title font-semibold text-sm">
           Alliance Stats
         </Link>
         <div className="w-10 flex justify-end">
@@ -73,12 +73,12 @@ export function NavHeader({ user }: { user: NavUser }) {
         </div>
       </div>
       {user && !isLoginish && (
-        <div className="flex items-center justify-between px-3 pb-2 max-w-5xl mx-auto text-xs text-neutral-500">
-          <Link href="/account" className="hover:text-neutral-900 hover:underline">
+        <div className="flex items-center justify-between px-3 pb-2 max-w-5xl mx-auto text-xs">
+          <Link href="/account" className="text-nav-link hover:underline">
             {user.name} · {user.role}
           </Link>
           <form action={logout}>
-            <button type="submit" className="text-neutral-500 hover:text-neutral-900 underline">
+            <button type="submit" className="text-nav-link underline">
               Log out
             </button>
           </form>
