@@ -10,7 +10,6 @@ export type WeekdayRule = { categoryKey: string; rank: number } | { random: true
 export type ConductorSettings = {
   fromWeek: number;
   weeksPerSelect: number;
-  autoResolveCollisions: boolean;
   allowDuplicatePassengers: boolean;
   weekdayRules: Record<Weekday, WeekdayRule>;
 };
@@ -20,7 +19,6 @@ export type ConductorSettings = {
 export const DEFAULT_CONDUCTOR_SETTINGS: ConductorSettings = {
   fromWeek: 1,
   weeksPerSelect: 1,
-  autoResolveCollisions: false,
   allowDuplicatePassengers: false,
   weekdayRules: {
     monday: { random: true },

@@ -12,14 +12,12 @@ type WeekdayRule = { categoryKey: string; rank: number } | { random: true };
 type ConductorSettings = {
   fromWeek: number;
   weeksPerSelect: number;
-  autoResolveCollisions: boolean;
   allowDuplicatePassengers: boolean;
   weekdayRules: Record<Weekday, WeekdayRule>;
 };
 const DEFAULT_CONDUCTOR_SETTINGS: ConductorSettings = {
   fromWeek: 1,
   weeksPerSelect: 1,
-  autoResolveCollisions: false,
   allowDuplicatePassengers: false,
   weekdayRules: {
     monday: { random: true },
@@ -125,19 +123,6 @@ export function ConductorSettingsClient({ categories }: { categories: { key: str
         <p className="text-neutral-400 text-xs -mt-2">
           Cycle length in weeks - 1 selects 7 conductors and 7 passengers, 2 selects 14 of each.
         </p>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            disabled={loading}
-            checked={settings.autoResolveCollisions}
-            onChange={(e) => {
-              setSaved(false);
-              setSettings((s) => ({ ...s, autoResolveCollisions: e.target.checked }));
-            }}
-          />
-          Auto-resolve collisions (bump to the next rank down instead of stopping for manual review)
-        </label>
 
         <label className="flex items-center gap-2 text-sm">
           <input

@@ -58,34 +58,73 @@ function buildLeaderboardWithFallback(
   return [];
 }
 
-/** Resolves one passenger slot's field+rank rule against that week's leaderboard, honoring availability and auto-resolve. */
+/**
+ * Resolves one passenger slot's field+rank rule against that week's leaderboard, literally -
+ * whoever is at that rank is the answer, every time, even if they're already used
+ * elsewhere in the round. No walk-down, no availability check: a slot either has that
+ * literal person or it has nobody (rank doesn't exist on that week's leaderboard).
+ * Duplicate-use is detected and surfaced separately (see detectRoundCollision), not
+ * avoided here - avoiding it silently is exactly what this function used to do and what
+ * made a manual rank/field edit ripple into other slots unexpectedly.
+ */
 function resolvePassenger(
   leaderboard: LeaderboardEntry[],
-  requestedRank: number,
-  isAvailable: (memberId: number) => boolean,
-  autoResolve: boolean
+  requestedRank: number
 ): { memberId: number | null; sourceRank: number | null; collision: boolean; collisionReason: string | null } {
   const requested = leaderboard[requestedRank - 1];
   if (!requested) {
     return { memberId: null, sourceRank: null, collision: true, collisionReason: `No member at rank ${requestedRank}.` };
   }
-  if (isAvailable(requested.memberId)) {
-    return { memberId: requested.memberId, sourceRank: requestedRank, collision: false, collisionReason: null };
+  return { memberId: requested.memberId, sourceRank: requestedRank, collision: false, collisionReason: null };
+}
+
+/**
+ * A slot's collision is now something to detect and surface, not something resolution
+ * silently avoids (see resolvePassenger's docs above). Checks, in order: no member
+ * assigned; the same member as this exact day's other role (Conductor and Passenger can't
+ * be the same person); and, for Passengers, the same member already used as Passenger
+ * somewhere else in the round (only when allowDuplicatePassengers is off) - the same rule
+ * confirmRound() already enforces at confirm time, surfaced here at draft time instead.
+ */
+function detectRoundCollision(
+  slot: { slotIndex: number; role: "conductor" | "passenger"; memberId: number | null },
+  allSelections: { slotIndex: number; role: string; memberId: number | null }[],
+  allowDuplicatePassengers: boolean
+): { collision: boolean; collisionReason: string | null } {
+  if (slot.memberId === null) {
+    return { collision: true, collisionReason: "No member assigned." };
   }
-  if (autoResolve) {
-    let idx = requestedRank; // requestedRank-1 is the 0-based index of the requested pick, so this is the next one down
-    while (idx < leaderboard.length && !isAvailable(leaderboard[idx].memberId)) idx++;
-    if (idx < leaderboard.length) {
-      return { memberId: leaderboard[idx].memberId, sourceRank: idx + 1, collision: false, collisionReason: null };
+
+  const otherRoleSameDay = allSelections.find((s) => s.slotIndex === slot.slotIndex && s.role !== slot.role);
+  if (otherRoleSameDay && otherRoleSameDay.memberId === slot.memberId) {
+    return { collision: true, collisionReason: "Same member is Conductor and Passenger this day." };
+  }
+
+  if (slot.role === "passenger" && !allowDuplicatePassengers) {
+    const otherPassenger = allSelections.find(
+      (s) => s.role === "passenger" && s.slotIndex !== slot.slotIndex && s.memberId === slot.memberId
+    );
+    if (otherPassenger) {
+      const weekday = weekdayForSlot(otherPassenger.slotIndex);
+      const label = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+      return { collision: true, collisionReason: `Also Passenger on ${label}.` };
     }
-    return { memberId: null, sourceRank: null, collision: true, collisionReason: "No available member found at or below the requested rank." };
   }
-  return {
-    memberId: requested.memberId,
-    sourceRank: requestedRank,
-    collision: true,
-    collisionReason: "Collides with this day's Conductor or an existing Passenger pick - change the member or rank.",
-  };
+
+  return { collision: false, collisionReason: null };
+}
+
+/**
+ * The specific "why" for a slot that never resolved to anyone, used whenever memberId is
+ * null - detectRoundCollision's own null-member case is a generic fallback ("No member
+ * assigned.") meant only for a duplicate-detection pass that's already been told to skip
+ * unresolved slots (see generateDraft's second pass); every other caller needs the real
+ * reason instead of that generic one.
+ */
+function unresolvedReason(role: "conductor" | "passenger", sourceCategoryKey: string | null, sourceRank: number | null): string {
+  if (role === "conductor") return "No eligible member with data for this week.";
+  if (sourceCategoryKey) return `No member at rank ${sourceRank ?? "?"}.`;
+  return "No eligible member available for Random.";
 }
 
 async function loadContext(startWeek: number, slotCount: number) {
@@ -150,11 +189,6 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
 
   const usedPassengerMemberIds = new Set<number>();
   const activeMemberIds = members.map((m) => m.id);
-  // Each weekday's rule always points at the same category ("Monday is always vs"), but the
-  // rank used for it climbs by 1 every time that category comes up again - same week or a
-  // later one in this cycle - instead of resetting back to the rule's configured rank each
-  // time. Mirrors the math overrideSlotRankCascade uses for a manual rank edit.
-  const categoryLastRank = new Map<string, number>();
 
   for (let i = 0; i < slotCount; i++) {
     const weekday = weekdayForSlot(i);
@@ -162,27 +196,34 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
     const rule = settings.weekdayRules[weekday];
     const conductorMemberId = conductorByIndex.get(i) ?? null;
     const weekActiveIds = activeIdsByWeek.get(weekNumber)!;
-    const isAvailable = (candidateId: number) =>
-      candidateId !== conductorMemberId &&
-      weekActiveIds.has(candidateId) &&
-      (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
 
     let result: { memberId: number | null; sourceRank: number | null; collision: boolean; collisionReason: string | null };
     let sourceCategoryKey: string | null = null;
     let requestedRank: number | null = null;
 
     if (isRandomRule(rule)) {
+      // Random keeps trying to avoid an easily-avoidable duplicate (same as the explicit
+      // Reroll action) - there's no field/rank an admin could manually re-target for a
+      // Random slot the way there is for a category one, so this is the only chance to
+      // sidestep an obvious collision before it needs a Reroll click to fix.
+      const isAvailable = (candidateId: number) =>
+        candidateId !== conductorMemberId &&
+        weekActiveIds.has(candidateId) &&
+        (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
       const pool = activeMemberIds.filter(isAvailable);
       result =
         pool.length > 0
           ? { memberId: pool[Math.floor(Math.random() * pool.length)], sourceRank: null, collision: false, collisionReason: null }
           : { memberId: null, sourceRank: null, collision: true, collisionReason: "No eligible member available for Random." };
     } else {
+      // Every occurrence of a category always requests that weekday rule's own configured
+      // rank, literally - two days both set to "VS rank 1" both request rank 1, and (unless
+      // one is on a different week) will resolve to the same person. That's now surfaced as
+      // a collision below, not silently spread apart.
       sourceCategoryKey = rule.categoryKey;
-      requestedRank = categoryLastRank.has(rule.categoryKey) ? categoryLastRank.get(rule.categoryKey)! + 1 : rule.rank;
-      categoryLastRank.set(rule.categoryKey, requestedRank);
+      requestedRank = rule.rank;
       const leaderboard = buildLeaderboardWithFallback(members, categoryValues, rule.categoryKey, weekNumber);
-      result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+      result = resolvePassenger(leaderboard, requestedRank);
     }
 
     if (result.memberId !== null) usedPassengerMemberIds.add(result.memberId);
@@ -196,14 +237,25 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
       memberName: result.memberId !== null ? (memberNameById.get(result.memberId) ?? null) : null,
       pointsAtSelection: null,
       // Keep the rule's own field even when nobody could be resolved for it (no data for
-      // that week, or every candidate already used) - a collision should read "VS, no
-      // member found", not silently mislabel the slot as Random.
+      // that week) - a collision should read "VS, no member found", not silently mislabel
+      // the slot as Random.
       sourceCategoryKey,
       sourceRank: result.sourceRank ?? requestedRank,
       manualOverride: false,
       collision: result.collision,
       collisionReason: result.collisionReason,
     });
+  }
+
+  // Second pass, now that every slot in the round is known: flag duplicate use across
+  // slots (same member twice as Passenger, or Conductor==Passenger the same day) - only for
+  // slots that actually resolved to someone, so an unresolved slot keeps its more specific
+  // "why" reason from above instead of a generic "No member assigned."
+  for (const slot of slots) {
+    if (slot.memberId === null) continue;
+    const { collision, collisionReason } = detectRoundCollision(slot, slots, settings.allowDuplicatePassengers);
+    slot.collision = collision;
+    slot.collisionReason = collisionReason;
   }
 
   const round = await prisma.conductorRound.create({ data: { weeksInCycle, startWeek, status: "draft" } });
@@ -224,11 +276,13 @@ export async function generateDraft(weeksInCycle: number, startWeek: number): Pr
 }
 
 /**
- * Any Passenger slot still unresolved (no member found the last time it was resolved) gets
- * one more attempt every time the round is loaded - not just at generation time - since the
- * conditions that blocked it (a week's data not being in yet, another slot using up the only
- * available candidate) can change afterward. A slot the admin has manually touched is never
- * re-picked out from under them; it stays exactly as they left it.
+ * Any Passenger slot still unresolved gets one more attempt every time the round is loaded
+ * - not just at generation time - since the only thing that can still change afterward is
+ * whether a week's data has since been imported (the literal rank now either exists on
+ * that week's leaderboard or it doesn't; nothing about who's "already used" affects this
+ * anymore). A slot the admin has manually touched is never re-picked out from under them;
+ * it stays exactly as they left it. Random slots still avoid an easily-avoidable duplicate
+ * on retry, same carve-out as generateDraft and Reroll.
  */
 async function retryUnresolvedPassengers(round: { status: string; selections: { id: number; role: string; slotIndex: number; weekNumber: number; memberId: number | null; sourceCategoryKey: string | null; sourceRank: number | null; manualOverride: boolean }[] }): Promise<void> {
   if (round.status !== "draft") return;
@@ -249,18 +303,17 @@ async function retryUnresolvedPassengers(round: { status: string; selections: { 
 
   const updates: { id: number; memberId: number | null; sourceRank: number | null }[] = [];
   for (const s of pending) {
-    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(s.weekNumber);
-    const isAvailable = (candidateId: number) =>
-      candidateId !== conductorMemberBySlot.get(s.slotIndex) &&
-      weekActiveIds.has(candidateId) &&
-      (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
-
     let result: { memberId: number | null; sourceRank: number | null };
     if (s.sourceCategoryKey) {
       const leaderboard = buildLeaderboardWithFallback(activeMembers, categoryValues, s.sourceCategoryKey, s.weekNumber);
       const requestedRank = s.sourceRank ?? 1;
-      result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+      result = resolvePassenger(leaderboard, requestedRank);
     } else {
+      const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(s.weekNumber);
+      const isAvailable = (candidateId: number) =>
+        candidateId !== conductorMemberBySlot.get(s.slotIndex) &&
+        weekActiveIds.has(candidateId) &&
+        (settings.allowDuplicatePassengers || !usedPassengerMemberIds.has(candidateId));
       const pool = activeMemberIds.filter(isAvailable);
       result = pool.length > 0 ? { memberId: pool[Math.floor(Math.random() * pool.length)], sourceRank: null } : { memberId: null, sourceRank: null };
     }
@@ -285,24 +338,34 @@ export async function getRoundSlots(roundId: number): Promise<{ round: { id: num
 
   await retryUnresolvedPassengers(round);
 
-  const members = await prisma.member.findMany();
+  const [members, settings] = await Promise.all([prisma.member.findMany(), getConductorSettings()]);
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
 
   const slots: DraftSlot[] = round.selections
-    .map((s) => ({
-      slotIndex: s.slotIndex,
-      weekday: weekdayForSlot(s.slotIndex),
-      weekNumber: s.weekNumber,
-      role: s.role as "conductor" | "passenger",
-      memberId: s.memberId,
-      memberName: s.memberId !== null ? (memberNameById.get(s.memberId) ?? null) : null,
-      pointsAtSelection: s.pointsAtSelection,
-      sourceCategoryKey: s.sourceCategoryKey,
-      sourceRank: s.sourceRank,
-      manualOverride: s.manualOverride,
-      collision: s.memberId === null,
-      collisionReason: s.memberId === null ? "No member assigned." : null,
-    }))
+    .map((s) => {
+      const { collision, collisionReason } =
+        s.memberId === null
+          ? { collision: true, collisionReason: unresolvedReason(s.role as "conductor" | "passenger", s.sourceCategoryKey, s.sourceRank) }
+          : detectRoundCollision(
+              { slotIndex: s.slotIndex, role: s.role as "conductor" | "passenger", memberId: s.memberId },
+              round.selections,
+              settings.allowDuplicatePassengers
+            );
+      return {
+        slotIndex: s.slotIndex,
+        weekday: weekdayForSlot(s.slotIndex),
+        weekNumber: s.weekNumber,
+        role: s.role as "conductor" | "passenger",
+        memberId: s.memberId,
+        memberName: s.memberId !== null ? (memberNameById.get(s.memberId) ?? null) : null,
+        pointsAtSelection: s.pointsAtSelection,
+        sourceCategoryKey: s.sourceCategoryKey,
+        sourceRank: s.sourceRank,
+        manualOverride: s.manualOverride,
+        collision,
+        collisionReason,
+      };
+    })
     .sort((a, b) => a.slotIndex - b.slotIndex || a.role.localeCompare(b.role));
 
   return { round: { id: round.id, weeksInCycle: round.weeksInCycle, startWeek: round.startWeek, status: round.status }, slots };
@@ -322,7 +385,10 @@ export async function overrideSlot(
   const existing = round.selections.find((s) => s.slotIndex === slotIndex && s.role === role);
   if (!existing) return { ok: false, error: "Slot not found." };
 
-  const members = await prisma.member.findMany({ where: { isActive: true } });
+  const [members, settings] = await Promise.all([
+    prisma.member.findMany({ where: { isActive: true } }),
+    getConductorSettings(),
+  ]);
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
 
   let memberId: number | null = existing.memberId;
@@ -340,49 +406,39 @@ export async function overrideSlot(
       sourceRank = null;
     }
   } else if (input.sourceCategoryKey !== undefined && role === "passenger") {
-    const settings = await getConductorSettings();
-    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(existing.weekNumber);
-    const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
-    const usedElsewhere = new Set(
-      round.selections
-        .filter((s) => s.role === "passenger" && s.slotIndex !== slotIndex && s.memberId !== null)
-        .map((s) => s.memberId as number)
-    );
-    const isAvailable = (candidateId: number) =>
-      candidateId !== conductorSlot?.memberId &&
-      weekActiveIds.has(candidateId) &&
-      (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
-
     if (input.sourceCategoryKey === null) {
+      // Switching to Random still avoids an easily-avoidable duplicate, same carve-out as
+      // generateDraft/Reroll - there's no field/rank to manually re-target a Random pick.
+      const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(existing.weekNumber);
+      const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
+      const usedElsewhere = new Set(
+        round.selections
+          .filter((s) => s.role === "passenger" && s.slotIndex !== slotIndex && s.memberId !== null)
+          .map((s) => s.memberId as number)
+      );
+      const isAvailable = (candidateId: number) =>
+        candidateId !== conductorSlot?.memberId &&
+        weekActiveIds.has(candidateId) &&
+        (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
       const pool = members.map((m) => m.id).filter(isAvailable);
       memberId = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
       sourceCategoryKey = null;
       sourceRank = null;
     } else {
+      // Literal resolution: whoever is at this rank on the new field's leaderboard, full
+      // stop - a resulting duplicate is reported (see detectRoundCollision), not avoided.
       const categoryValues = await getConductorCategoryWeekValues();
       const leaderboard = buildLeaderboardWithFallback(members, categoryValues, input.sourceCategoryKey, existing.weekNumber);
       const requestedRank = existing.sourceRank ?? 1;
-      const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
+      const result = resolvePassenger(leaderboard, requestedRank);
       sourceCategoryKey = input.sourceCategoryKey;
       memberId = result.memberId;
       sourceRank = result.sourceRank ?? requestedRank;
     }
   } else if (input.sourceRank !== undefined && role === "passenger" && existing.sourceCategoryKey) {
-    const settings = await getConductorSettings();
     const categoryValues = await getConductorCategoryWeekValues();
-    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(existing.weekNumber);
     const leaderboard = buildLeaderboardWithFallback(members, categoryValues, existing.sourceCategoryKey, existing.weekNumber);
-    const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
-    const usedElsewhere = new Set(
-      round.selections
-        .filter((s) => s.role === "passenger" && s.slotIndex !== slotIndex && s.memberId !== null)
-        .map((s) => s.memberId as number)
-    );
-    const isAvailable = (candidateId: number) =>
-      candidateId !== conductorSlot?.memberId &&
-      weekActiveIds.has(candidateId) &&
-      (settings.allowDuplicatePassengers || !usedElsewhere.has(candidateId));
-    const result = resolvePassenger(leaderboard, input.sourceRank, isAvailable, false);
+    const result = resolvePassenger(leaderboard, input.sourceRank);
     memberId = result.memberId;
     sourceRank = result.sourceRank ?? input.sourceRank;
   }
@@ -391,6 +447,16 @@ export async function overrideSlot(
     where: { id: existing.id },
     data: { memberId, pointsAtSelection, sourceCategoryKey, sourceRank, manualOverride: true },
   });
+
+  const otherSelections = round.selections.map((s) => (s.id === updated.id ? updated : s));
+  const { collision, collisionReason } =
+    updated.memberId === null
+      ? { collision: true, collisionReason: unresolvedReason(updated.role as "conductor" | "passenger", updated.sourceCategoryKey, updated.sourceRank) }
+      : detectRoundCollision(
+          { slotIndex: updated.slotIndex, role: updated.role as "conductor" | "passenger", memberId: updated.memberId },
+          otherSelections,
+          settings.allowDuplicatePassengers
+        );
 
   return {
     ok: true,
@@ -405,8 +471,8 @@ export async function overrideSlot(
       sourceCategoryKey: updated.sourceCategoryKey,
       sourceRank: updated.sourceRank,
       manualOverride: updated.manualOverride,
-      collision: updated.memberId === null,
-      collisionReason: updated.memberId === null ? "No member assigned." : null,
+      collision,
+      collisionReason,
     },
   };
 }
@@ -470,78 +536,6 @@ export async function rerollPassengerSlot(
       collisionReason: updated.memberId === null ? "No eligible member available for Random." : null,
     },
   };
-}
-
-/**
- * Overriding a category-based Passenger's rank cascades: every other Passenger slot in
- * this round sharing the same category gets re-ranked in chronological order relative to
- * the changed slot, so a fixed top-ranked member isn't picked again for every later
- * occurrence of that category. E.g. setting the first "vs" Passenger to rank 1 pushes the
- * next "vs" Passenger to rank 2, the one after to rank 3, and so on - each occurrence still
- * resolved against *its own* week's leaderboard (a category can repeat across weeks in a
- * multi-week cycle), just walking one rank deeper each time.
- */
-export async function overrideSlotRankCascade(
-  roundId: number,
-  slotIndex: number,
-  sourceRank: number
-): Promise<{ ok: true; slots: DraftSlot[] } | { ok: false; error: string }> {
-  const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
-  if (!round) return { ok: false, error: "Round not found." };
-  if (round.status !== "draft") return { ok: false, error: "Only draft rounds can be edited." };
-
-  const changed = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "passenger");
-  if (!changed) return { ok: false, error: "Slot not found." };
-  if (!changed.sourceCategoryKey) return { ok: false, error: "This slot is Random, not category-based - there's no rank to cascade." };
-
-  const sameCategory = round.selections
-    .filter((s) => s.role === "passenger" && s.sourceCategoryKey === changed.sourceCategoryKey)
-    .sort((a, b) => a.slotIndex - b.slotIndex);
-  const changedPos = sameCategory.findIndex((s) => s.slotIndex === slotIndex);
-
-  const [settings, categoryValues, members] = await Promise.all([
-    getConductorSettings(),
-    getConductorCategoryWeekValues(),
-    prisma.member.findMany({ where: { isActive: true } }),
-  ]);
-
-  const conductorMemberBySlot = new Map(round.selections.filter((s) => s.role === "conductor").map((s) => [s.slotIndex, s.memberId]));
-  // Passengers picked for a *different* category stay fixed - only this category's own
-  // occurrences get walked and re-resolved.
-  const usedElsewhere = new Set(
-    round.selections
-      .filter((s) => s.role === "passenger" && s.sourceCategoryKey !== changed.sourceCategoryKey && s.memberId !== null)
-      .map((s) => s.memberId as number)
-  );
-  const usedInGroup = new Set<number>();
-
-  const updates: { id: number; memberId: number | null; sourceRank: number | null }[] = [];
-  for (let p = 0; p < sameCategory.length; p++) {
-    const slot = sameCategory[p];
-    const requestedRank = Math.max(1, sourceRank + (p - changedPos));
-    const leaderboard = buildLeaderboardWithFallback(members, categoryValues, changed.sourceCategoryKey, slot.weekNumber);
-    const weekActiveIds = await getActiveMemberIdsForWeekWithFallback(slot.weekNumber);
-    const isAvailable = (candidateId: number) =>
-      candidateId !== conductorMemberBySlot.get(slot.slotIndex) &&
-      weekActiveIds.has(candidateId) &&
-      !usedElsewhere.has(candidateId) &&
-      (settings.allowDuplicatePassengers || !usedInGroup.has(candidateId));
-    const result = resolvePassenger(leaderboard, requestedRank, isAvailable, settings.autoResolveCollisions);
-    if (result.memberId !== null) usedInGroup.add(result.memberId);
-    updates.push({ id: slot.id, memberId: result.memberId, sourceRank: result.sourceRank ?? requestedRank });
-  }
-
-  await prisma.$transaction(
-    updates.map((u) =>
-      prisma.conductorSelection.update({
-        where: { id: u.id },
-        data: { memberId: u.memberId, sourceRank: u.sourceRank, manualOverride: true },
-      })
-    )
-  );
-
-  const reloaded = await getRoundSlots(roundId);
-  return reloaded ? { ok: true, slots: reloaded.slots } : { ok: false, error: "Failed to reload round after cascading." };
 }
 
 /** Re-validates the hard rules against the round's current (possibly overridden) state, then finalizes it. */

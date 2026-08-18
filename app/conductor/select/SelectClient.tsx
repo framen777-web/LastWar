@@ -91,10 +91,10 @@ export function SelectClient({
     }
   }
 
-  // Every PATCH already returns the exact slot(s) it just resolved, so apply that response
-  // directly instead of following it up with a separate GET - that second round-trip could
-  // land its own (slightly older) snapshot after the PATCH's, visually reverting the edit
-  // that was just made.
+  // Every PATCH edits exactly one slot and returns exactly that slot, so apply it directly
+  // instead of following it up with a separate GET - that second round-trip could land its
+  // own (slightly older) snapshot after the PATCH's, visually reverting the edit that was
+  // just made. Nothing cascades to other slots anymore, so this is always a single-slot patch.
   function applyPatchedSlot(slot: DraftSlot) {
     setSlots((prev) => prev.map((s) => (s.slotIndex === slot.slotIndex && s.role === slot.role ? slot : s)));
   }
@@ -111,10 +111,6 @@ export function SelectClient({
     const data = await res.json();
     if (!res.ok) {
       setError(data.error ?? "Failed to update slot.");
-    } else if (data.slots) {
-      // A rank change cascades to every slot sharing that field - the response is the whole
-      // round's fresh slot list, not just this one.
-      setSlots(data.slots);
     } else if (data.slot) {
       applyPatchedSlot(data.slot);
     }
@@ -371,15 +367,15 @@ function CombinedSlotTable({
                         editable ? (
                           <input
                             // Remount whenever the field or the stored rank changes server-side
-                            // (a field switch, a cascade from another row, a reroll) so this
-                            // uncontrolled input's shown value never goes stale.
+                            // (a field switch or a reroll) so this uncontrolled input's shown
+                            // value never goes stale.
                             key={`${passenger.sourceCategoryKey}:${passenger.sourceRank}`}
                             type="number"
                             min={1}
                             disabled={pendingPassenger}
                             defaultValue={passenger.sourceRank ?? 1}
                             onBlur={(e) => onOverrideRank(passenger, Number(e.target.value) || 1)}
-                            title="Changing this cascades to every other Passenger slot with the same field"
+                            title="Changes only this slot - literally whoever is at this rank on this field, even if that duplicates another slot"
                             className="border border-neutral-300 rounded px-1 py-0.5 text-xs w-14"
                           />
                         ) : (
