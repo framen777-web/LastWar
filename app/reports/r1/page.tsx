@@ -59,6 +59,15 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const params = await searchParams;
 
   const rows = await getMemberWeekRows();
+
+  const firstWeekByMember = new Map<number, number>();
+  for (const r of rows) {
+    const existing = firstWeekByMember.get(r.memberId);
+    if (existing === undefined || r.weekNumber < existing) {
+      firstWeekByMember.set(r.memberId, r.weekNumber);
+    }
+  }
+
   const weights = await getWeights();
   const scoredAll = computeAllMvp(rows, weights);
 
@@ -107,7 +116,12 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const windowB = [selectedWeek - 4, selectedWeek - 3, selectedWeek - 2, selectedWeek - 1, selectedWeek].filter((w) => w >= 1);
   const windowVSForB = windowB.filter((w) => w !== selectedWeek);
 
-  const presentThisWeek = scoredAll.filter((r) => r.weekNumber === selectedWeek);
+  const presentThisWeek = scoredAll.filter((r) => {
+    if (r.weekNumber !== selectedWeek) return false;
+    const firstWeek = firstWeekByMember.get(r.memberId);
+    if (firstWeek === undefined) return true; // no history at all - shouldn't happen, don't hide unexpectedly
+    return selectedWeek - firstWeek + 1 >= 5;
+  });
   const panelB = presentThisWeek
     .map((r) => {
       const mvpEntries = windowB.map((w) => mvpMap.get(`${r.memberId}:${w}`)).filter((e): e is ScoredRow => !!e);
