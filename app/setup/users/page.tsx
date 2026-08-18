@@ -11,13 +11,34 @@ export default async function UsersHubPage() {
       <h1 className="text-xl font-semibold">Users</h1>
       <div className="flex flex-col gap-3 max-w-sm">
         {visible("users-list") && (
-          <MenuButton href="/setup/users/list" label="Users" description="Login access, roles, and active status per member" />
+          <MenuButton
+            href="/setup/users/list"
+            label="Users"
+            description="Login access, roles, and active status per member"
+            icon="👤"
+            accentKey="users-list"
+            index={0}
+          />
         )}
         {visible("users-merge") && (
-          <MenuButton href="/setup/users/merge" label="Merge" description="Combine two member rows that turned out to be the same person" />
+          <MenuButton
+            href="/setup/users/merge"
+            label="Merge"
+            description="Combine two member rows that turned out to be the same person"
+            icon="🔗"
+            accentKey="users-merge"
+            index={1}
+          />
         )}
         {visible("users-menu-access") && (
-          <MenuButton href="/setup/users/menu-access" label="Menu Access" description="Which roles can see each menu button" />
+          <MenuButton
+            href="/setup/users/menu-access"
+            label="Menu Access"
+            description="Which roles can see each menu button"
+            icon="🔐"
+            accentKey="users-menu-access"
+            index={2}
+          />
         )}
       </div>
     </div>

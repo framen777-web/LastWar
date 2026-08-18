@@ -12,10 +12,24 @@ export default async function IndividualDashboardHubPage() {
 
       <div className="flex flex-col gap-3 max-w-sm">
         {visible("individual-detail-list") && (
-          <MenuButton href="/dashboards/individual/detail" label="Detail List" description="Week-by-week stats table" />
+          <MenuButton
+            href="/dashboards/individual/detail"
+            label="Detail List"
+            description="Week-by-week stats table"
+            icon="📋"
+            accentKey="individual-detail"
+            index={0}
+          />
         )}
         {visible("individual-graphs") && (
-          <MenuButton href="/dashboards/individual/graphs" label="Graphs" description="Bar graphs of your own stats over time" />
+          <MenuButton
+            href="/dashboards/individual/graphs"
+            label="Graphs"
+            description="Bar graphs of your own stats over time"
+            icon="📈"
+            accentKey="individual-graphs"
+            index={1}
+          />
         )}
       </div>
     </div>

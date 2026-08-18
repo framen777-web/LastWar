@@ -34,9 +34,25 @@ export default async function ConductorPage() {
 
       <div className="flex flex-col gap-3 max-w-sm">
         {visible("conductor-select") && (
-          <MenuButton href="/conductor/select" label="Select Conductors & Passengers" description="Generate and confirm the next rotation" />
+          <MenuButton
+            href="/conductor/select"
+            label="Select Conductors & Passengers"
+            description="Generate and confirm the next rotation"
+            icon="🎫"
+            accentKey="conductor-select"
+            index={0}
+          />
         )}
-        {visible("conductor-history") && <MenuButton href="/conductor/history" label="History" description="Past confirmed rotations" />}
+        {visible("conductor-history") && (
+          <MenuButton
+            href="/conductor/history"
+            label="History"
+            description="Past confirmed rotations"
+            icon="📜"
+            accentKey="conductor-history"
+            index={1}
+          />
+        )}
       </div>
 
       <h2 className="text-lg font-semibold">Standings</h2>

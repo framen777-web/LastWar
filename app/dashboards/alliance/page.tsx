@@ -16,14 +16,29 @@ export default async function AllianceReportsHubPage() {
             href="/dashboards/alliance/detail"
             label="Detail Report"
             description="Week range, commander/rank filters, summary or per-week detail"
+            icon="📋"
+            accentKey="alliance-detail"
+            index={0}
           />
         )}
-        {visible("alliance-graphs") && <MenuButton href="/dashboards/alliance/graphs" label="Graphs" description="Coming soon" />}
+        {visible("alliance-graphs") && (
+          <MenuButton
+            href="/dashboards/alliance/graphs"
+            label="Graphs"
+            description="Coming soon"
+            icon="📈"
+            accentKey="alliance-graphs"
+            index={1}
+          />
+        )}
         {visible("alliance-member-movement") && (
           <MenuButton
             href="/dashboards/alliance/member-movement"
             label="Member Movement"
             description="Who joined and left between last week and the selected week"
+            icon="🔀"
+            accentKey="alliance-movement"
+            index={2}
           />
         )}
       </div>

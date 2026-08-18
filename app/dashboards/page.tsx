@@ -16,10 +16,20 @@ export default async function DashboardsHubPage() {
             href="/dashboards/individual"
             label="Individual Dashboard"
             description={user.role === "MEMBER" ? "Your growth across weeks" : "Any member's growth across weeks"}
+            icon="👤"
+            accentKey="dashboards-individual"
+            index={0}
           />
         )}
         {visible("dashboards-alliance") && (
-          <MenuButton href="/dashboards/alliance" label="Alliance Reports" description="Detail report and graphs across a week range" />
+          <MenuButton
+            href="/dashboards/alliance"
+            label="Alliance Reports"
+            description="Detail report and graphs across a week range"
+            icon="🏰"
+            accentKey="dashboards-alliance"
+            index={1}
+          />
         )}
       </div>
     </div>
