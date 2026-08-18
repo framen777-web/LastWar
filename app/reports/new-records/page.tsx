@@ -134,6 +134,10 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
       <ZoomProvider>
       <div className="flex items-center gap-2 text-sm flex-wrap">
         <form className="flex items-center gap-2 contents">
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+
           <label htmlFor="week" className="font-medium">
             Week
           </label>
@@ -145,10 +149,6 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
           </datalist>
 
           <LimitSelect defaultValue={selectedLimit} />
-
-          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-            Go
-          </button>
         </form>
 
         <ZoomControl />

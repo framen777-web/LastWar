@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 
+// Shared with LimitSelect and ZoomWrapper's View % control so all three stepper controls
+// stay visually identical.
+export const STEP_BTN =
+  "px-3 py-1.5 text-base leading-none font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent";
+
 /**
  * A number input with large, reliably-tappable +/- buttons instead of a browser's native
  * spinner arrows (which render a few pixels wide and are hard to hit on touch devices).
@@ -45,7 +50,7 @@ export function NumberStepper({
         aria-label={`Decrease ${name}`}
         onClick={() => setValue((v) => clamp(v - step))}
         disabled={min !== undefined && value <= min}
-        className="px-3 py-1.5 text-base leading-none font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent"
+        className={STEP_BTN}
       >
         −
       </button>
@@ -67,7 +72,7 @@ export function NumberStepper({
         aria-label={`Increase ${name}`}
         onClick={() => setValue((v) => clamp(v + step))}
         disabled={max !== undefined && value >= max}
-        className="px-3 py-1.5 text-base leading-none font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent"
+        className={STEP_BTN}
       >
         +
       </button>

@@ -207,6 +207,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
             ))}
           </select>
 
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+
           <label htmlFor="week" className="font-medium">
             Week
           </label>
@@ -218,10 +222,6 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
           </datalist>
 
           <LimitSelect defaultValue={selectedLimit} />
-
-          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-            Go
-          </button>
         </form>
 
         <ZoomControl />

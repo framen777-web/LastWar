@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { NumberStepper } from "@/components/NumberStepper";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getAllianceDetailData, type DetailRow, type SummaryRow } from "@/lib/dashboards/allianceDetail";
 
@@ -93,33 +94,21 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
       <h1 className="text-xl font-semibold">Detail Report</h1>
 
       <form className="flex items-end gap-3 text-sm flex-wrap">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1.5">
+          Go
+        </button>
+
         <div className="flex flex-col gap-1">
           <label htmlFor="fromWeek" className="font-medium">
             From week
           </label>
-          <input
-            id="fromWeek"
-            name="fromWeek"
-            type="number"
-            min={1}
-            defaultValue={fromWeek}
-            list="alliance-known-weeks"
-            className="border border-neutral-300 rounded px-2 py-1 w-24"
-          />
+          <NumberStepper id="fromWeek" name="fromWeek" defaultValue={fromWeek} min={1} listId="alliance-known-weeks" />
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="toWeek" className="font-medium">
             To week
           </label>
-          <input
-            id="toWeek"
-            name="toWeek"
-            type="number"
-            min={1}
-            defaultValue={toWeek}
-            list="alliance-known-weeks"
-            className="border border-neutral-300 rounded px-2 py-1 w-24"
-          />
+          <NumberStepper id="toWeek" name="toWeek" defaultValue={toWeek} min={1} listId="alliance-known-weeks" />
         </div>
         <datalist id="alliance-known-weeks">
           {weekNumbers.map((w) => (
@@ -164,10 +153,6 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
             <option value="summary">Summary (consolidated)</option>
           </select>
         </div>
-
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1.5">
-          Go
-        </button>
       </form>
 
       <p className="text-neutral-400 text-xs">

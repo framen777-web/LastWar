@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { DeleteWeekButton } from "@/components/DeleteWeekButton";
 import { MemberWeekActions } from "@/components/MemberWeekActions";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
+import { NumberStepper } from "@/components/NumberStepper";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 
@@ -178,18 +179,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "Detail List" : "Upload Review"}</h1>
 
       <form className="flex items-center gap-2 text-sm flex-wrap">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="week" className="font-medium">
           Week
         </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="dashboard-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
+        <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="dashboard-known-weeks" />
         <datalist id="dashboard-known-weeks">
           {weekNumbers.map((w) => (
             <option key={w} value={w} />
@@ -208,10 +205,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             </option>
           ))}
         </select>
-
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
 
         {user.role === "ADMIN" && totalRecordCountForWeek > 0 && (
           <DeleteWeekButton weekNumber={selectedWeek} recordCount={totalRecordCountForWeek} />

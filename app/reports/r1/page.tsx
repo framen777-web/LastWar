@@ -219,6 +219,10 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
       <ZoomProvider>
       <div className="flex items-center gap-2 text-sm flex-wrap">
         <form className="flex items-center gap-2 contents">
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+
           <label htmlFor="week" className="font-medium">
             Week
           </label>
@@ -235,10 +239,6 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           <NumberStepper id="rank" name="rank" defaultValue={selectedRank} min={1} max={5} className="w-8" />
 
           <LimitSelect defaultValue={selectedLimit} />
-
-          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-            Go
-          </button>
         </form>
 
         <ZoomControl />

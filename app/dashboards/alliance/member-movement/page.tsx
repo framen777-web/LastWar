@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { getMemberMovementReport } from "@/lib/dashboards/memberMovement";
+import { NumberStepper } from "@/components/NumberStepper";
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -52,26 +53,19 @@ export default async function MemberMovementPage({ searchParams }: PageProps<"/d
       </p>
 
       <form className="flex items-center gap-2 text-sm">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="week" className="font-medium">
           Week
         </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="member-movement-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
+        <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="member-movement-known-weeks" />
         <datalist id="member-movement-known-weeks">
           {weekNumbers.map((w) => (
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
       </form>
 
       <div className="flex gap-4 flex-wrap">

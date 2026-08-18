@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MultiCategoryRowActions } from "@/components/MultiCategoryRowActions";
+import { NumberStepper } from "@/components/NumberStepper";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 
@@ -119,26 +120,19 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
           ))}
         </select>
 
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="week" className="font-medium">
           Week
         </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="multi-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
+        <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="multi-known-weeks" />
         <datalist id="multi-known-weeks">
           {weekNumbers.map((w) => (
             <option key={w} value={w} />
           ))}
         </datalist>
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
       </form>
 
       {!selectedCategory ? (

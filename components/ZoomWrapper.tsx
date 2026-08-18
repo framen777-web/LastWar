@@ -1,10 +1,12 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { STEP_BTN } from "@/components/NumberStepper";
 
 const MIN_ZOOM = 35;
 const MAX_ZOOM = 100;
 const BOTTOM_MARGIN = 16;
+const ZOOM_STEP = 5;
 
 type ZoomState = { zoom: number; auto: boolean; setZoom: (z: number) => void; setAuto: (a: boolean) => void };
 const ZoomContext = createContext<ZoomState | null>(null);
@@ -23,23 +25,34 @@ export function ZoomProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ZoomControlMarkup({ zoom, auto, setZoom, setAuto }: ZoomState) {
+  function step(delta: number) {
+    setAuto(false);
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta)));
+  }
+
   return (
     <div className="flex items-center gap-2 text-sm">
-      <label htmlFor="view-zoom" className="font-medium">
-        View %
-      </label>
-      <input
-        id="view-zoom"
-        type="number"
-        min={10}
-        max={200}
-        value={zoom}
-        onChange={(e) => {
-          setAuto(false);
-          setZoom(Number(e.target.value) || 100);
-        }}
-        className="border border-neutral-300 rounded px-2 py-1 w-20"
-      />
+      <span className="font-medium">View %</span>
+      <div className="inline-flex items-center border border-neutral-300 rounded overflow-hidden">
+        <button type="button" aria-label="Decrease view %" disabled={zoom <= MIN_ZOOM} onClick={() => step(-ZOOM_STEP)} className={STEP_BTN}>
+          −
+        </button>
+        <input
+          id="view-zoom"
+          type="number"
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
+          value={zoom}
+          onChange={(e) => {
+            setAuto(false);
+            setZoom(Number(e.target.value) || 100);
+          }}
+          className="border-x border-neutral-300 px-1 py-1.5 text-center w-14 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button type="button" aria-label="Increase view %" disabled={zoom >= MAX_ZOOM} onClick={() => step(ZOOM_STEP)} className={STEP_BTN}>
+          +
+        </button>
+      </div>
       {!auto && (
         <button type="button" onClick={() => setAuto(true)} className="text-xs text-accent underline decoration-dotted">
           Reset to auto-fit

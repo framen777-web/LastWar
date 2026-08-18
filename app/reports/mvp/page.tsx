@@ -1,6 +1,7 @@
 import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
 import { ShareReportButton } from "@/components/ShareReportButton";
 import { NumberStepper } from "@/components/NumberStepper";
+import { LimitSelect } from "@/components/LimitSelect";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getMemberWeekRows } from "@/lib/mvp/data";
@@ -8,8 +9,6 @@ import { computeAllMvp, type ScoredRow } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH } from "@/lib/reportLayout";
-
-const LIMIT_OPTIONS = [10, 20, 50] as const;
 
 function fmtPct(n: number | null): { text: string; negative: boolean } {
   if (n === null) return { text: "—", negative: false };
@@ -118,6 +117,10 @@ export default async function MvpReportPage({ searchParams }: PageProps<"/report
       <ZoomProvider>
       <div className="flex items-center gap-2 text-sm flex-wrap">
         <form className="flex items-center gap-2 contents">
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+
           <label htmlFor="week" className="font-medium">
             Week
           </label>
@@ -128,21 +131,7 @@ export default async function MvpReportPage({ searchParams }: PageProps<"/report
             ))}
           </datalist>
 
-          <label htmlFor="limit" className="font-medium">
-            Show
-          </label>
-          <select id="limit" name="limit" defaultValue={selectedLimit} className="border border-neutral-300 rounded px-2 py-1">
-            {LIMIT_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                Top {n}
-              </option>
-            ))}
-            <option value="all">All</option>
-          </select>
-
-          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-            Go
-          </button>
+          <LimitSelect defaultValue={selectedLimit} />
         </form>
 
         <ZoomControl />

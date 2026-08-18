@@ -72,6 +72,22 @@ function normalizeColors(root: HTMLElement, resolve: (colorFn: string) => string
   }
 }
 
+// Shared screenshots should look the same regardless of the sharer's own theme - forces
+// plain body/table text to black and any element that already has a background to white,
+// after normalizeColors has made every color a plain rgb() html2canvas can parse. Borders
+// and accent-colored elements (buttons, panel header bars) are left alone on purpose - only
+// text and backgrounds flip, not the whole capture to strict monochrome.
+function forceWhiteBlackTheme(root: HTMLElement) {
+  const elements: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+  for (const el of elements) {
+    const computed = getComputedStyle(el);
+    el.style.color = "#000000";
+    if (computed.backgroundColor !== "rgba(0, 0, 0, 0)" && computed.backgroundColor !== "transparent") {
+      el.style.backgroundColor = "#ffffff";
+    }
+  }
+}
+
 /**
  * One generic "Share" button for a report, not tied to any specific platform -
  * navigator.share() with a captured image file already opens the OS's native share sheet,
@@ -105,14 +121,11 @@ export function ShareReportButton({
     el.style.zoom = "100%";
     try {
       const resolveColor = createColorResolver();
-      // Report panels don't set their own background - on screen they rely on the page
-      // body showing through, but html2canvas captures this element in isolation with
-      // nothing behind it. A hardcoded white fallback here looks fine on the default theme
-      // but breaks every dark theme, where body text is a *light* color meant to sit on a
-      // dark page - forcing white behind it produces unreadable near-white-on-white.
-      // Resolving the live page background (already theme-correct) instead fixes that for
-      // every theme at once, not just this one bug.
-      const pageBackground = resolveColor(getComputedStyle(document.body).backgroundColor);
+      // Shared screenshots always render pure white/black regardless of the sharer's own
+      // theme - a dark-themed report shared into a chat should look the same as a
+      // light-themed one, not carry the sender's color scheme into what's essentially a
+      // printed report.
+      const CAPTURE_BACKGROUND = "#ffffff";
 
       // Without explicit width/height, html2canvas sizes the canvas from
       // el.getBoundingClientRect() - but a wide report's panels (flex-row, flex-nowrap)
@@ -126,7 +139,7 @@ export function ShareReportButton({
       const captureHeight = el.scrollHeight;
 
       const canvas = await html2canvas(el, {
-        backgroundColor: pageBackground,
+        backgroundColor: CAPTURE_BACKGROUND,
         scale: 2,
         width: captureWidth,
         height: captureHeight,
@@ -134,6 +147,7 @@ export function ShareReportButton({
         windowHeight: captureHeight,
         onclone: (clonedDoc) => {
           normalizeColors(clonedDoc.body, resolveColor);
+          forceWhiteBlackTheme(clonedDoc.body);
         },
       });
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
