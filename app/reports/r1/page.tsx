@@ -248,7 +248,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
       <ZoomWrapper contentId="r1-report-content">
         <div className="flex flex-col gap-6">
           <div className="border border-neutral-200 rounded overflow-hidden">
-            <div className="bg-sky-300 px-3 py-1 font-semibold">Current Ranked {selectedRank}</div>
+            <div className="report-panel-header bg-sky-300 px-3 py-1 font-semibold">Current Ranked {selectedRank}</div>
             {panelA.length === 0 ? (
               <p className="text-neutral-500 text-sm p-2">No members at rank R{selectedRank}.</p>
             ) : (
@@ -264,7 +264,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           </div>
 
           <div className="border border-neutral-200 rounded overflow-hidden">
-            <div className="bg-pink-300 px-3 py-1 font-semibold">{bottomLabel} over 5 weeks</div>
+            <div className="report-panel-header bg-pink-300 px-3 py-1 font-semibold">{bottomLabel} over 5 weeks</div>
             {panelBLimited.length === 0 ? (
               <p className="text-neutral-500 text-sm p-2">No data for week {selectedWeek}.</p>
             ) : (

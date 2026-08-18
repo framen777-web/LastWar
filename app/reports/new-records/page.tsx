@@ -161,7 +161,7 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
             const records = newRecordsByCategory[i];
             return (
               <div key={c.key} className="border border-neutral-200 rounded overflow-hidden shrink-0">
-                <div className={`${c.headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{c.label}</div>
+                <div className={`report-panel-header ${c.headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{c.label}</div>
                 {records.length === 0 ? (
                   <p className="text-neutral-500 text-sm p-2">No new records this week.</p>
                 ) : (

@@ -157,7 +157,7 @@ export default async function HqLevelsPage({ searchParams }: PageProps<"/reports
       <ZoomWrapper contentId="hq-content">
         <div className="flex flex-row flex-nowrap items-start gap-4">
           <div className="border border-neutral-200 rounded overflow-hidden shrink-0">
-            <div className="bg-fuchsia-300 px-3 py-1 font-semibold text-center text-neutral-900">
+            <div className="report-panel-header bg-fuchsia-300 px-3 py-1 font-semibold text-center text-neutral-900">
               HQ Level Ups
             </div>
             {levelUps.length === 0 ? (
@@ -168,7 +168,7 @@ export default async function HqLevelsPage({ searchParams }: PageProps<"/reports
           </div>
 
           <div className="border border-neutral-200 rounded overflow-hidden shrink-0">
-            <div className="bg-fuchsia-300 px-3 py-1 font-semibold text-center text-neutral-900">
+            <div className="report-panel-header bg-fuchsia-300 px-3 py-1 font-semibold text-center text-neutral-900">
               HQ Distribution
             </div>
             {distribution.length === 0 ? (

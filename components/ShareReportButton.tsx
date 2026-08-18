@@ -80,6 +80,7 @@ function normalizeColors(root: HTMLElement, resolve: (colorFn: string) => string
 function forceWhiteBlackTheme(root: HTMLElement) {
   const elements: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
   for (const el of elements) {
+    if (el.closest(".report-panel-header")) continue; // colored section headers stay as-is
     const computed = getComputedStyle(el);
     el.style.color = "#000000";
     if (computed.backgroundColor !== "rgba(0, 0, 0, 0)" && computed.backgroundColor !== "transparent") {

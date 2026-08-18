@@ -82,7 +82,7 @@ export default async function ClubsPage() {
         <div className="flex flex-row flex-nowrap items-start gap-4">
           {byTier.map(({ tier, rows }) => (
             <div key={tier.key} className="border border-neutral-200 rounded overflow-hidden shrink-0">
-              <div className={`${tier.headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{tier.label}</div>
+              <div className={`report-panel-header ${tier.headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{tier.label}</div>
               {rows.length === 0 ? (
                 <p className="text-neutral-500 text-sm p-2">No members yet.</p>
               ) : (

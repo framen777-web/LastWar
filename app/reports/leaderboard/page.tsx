@@ -323,7 +323,7 @@ function Panel({
 }) {
   return (
     <div className="border border-neutral-200 rounded overflow-hidden shrink-0">
-      <div className={`${headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{title}</div>
+      <div className={`report-panel-header ${headerClass} px-3 py-1 font-semibold text-center text-neutral-900`}>{title}</div>
       {children}
     </div>
   );
