@@ -12,6 +12,7 @@ type User = {
   effectiveRole: Role;
   hasPassword: boolean;
   isActive: boolean;
+  nameConfirmed: boolean;
 };
 
 export function UsersClient() {
@@ -70,7 +71,9 @@ export function UsersClient() {
         Set a password to grant a member login access. Role is auto-derived from Alliance Rank (R4/R5 → Leader,
         else Member) unless overridden here. Members&apos; Active status is automatic - it reflects whether they had
         stats in the last completed week{lastCompletedWeek !== null ? ` (week ${lastCompletedWeek})` : ""}; Admin and
-        Leader accounts stay under your manual control below.
+        Leader accounts stay under your manual control below. Members marked <strong>New</strong> were auto-created
+        from a screenshot that didn&apos;t match anyone on the roster - check the name is right (or rename it to
+        match an existing member, then have them merged) and click Confirm to clear the flag.
       </p>
 
       <input
@@ -100,7 +103,23 @@ export function UsersClient() {
             <tbody>
               {filtered.map((u) => (
                 <tr key={u.id} className={`border-b border-neutral-100 ${u.isActive ? "" : "opacity-50"}`}>
-                  <td className="py-2 pr-3 font-medium whitespace-nowrap">{u.name}</td>
+                  <td className="py-2 pr-3 font-medium whitespace-nowrap">
+                    {u.name}
+                    {!u.nameConfirmed && (
+                      <>
+                        <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                          New
+                        </span>
+                        <button
+                          onClick={() => patchUser(u.id, { nameConfirmed: true })}
+                          disabled={busyId === u.id}
+                          className="ml-2 border border-amber-300 text-amber-800 rounded px-2 py-1 text-xs disabled:opacity-50"
+                        >
+                          Confirm
+                        </button>
+                      </>
+                    )}
+                  </td>
                   <td className="py-2 pr-3 text-neutral-500">{u.allianceRank ?? "—"}</td>
                   <td className="py-2 pr-3">
                     <select

@@ -16,8 +16,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     return NextResponse.json({ error: "Member not found." }, { status: 404 });
   }
 
-  const body = (await request.json()) as { password?: string; role?: string | null; isActive?: boolean };
-  const data: { passwordHash?: string; role?: string | null; isActive?: boolean } = {};
+  const body = (await request.json()) as {
+    password?: string;
+    role?: string | null;
+    isActive?: boolean;
+    nameConfirmed?: boolean;
+  };
+  const data: { passwordHash?: string; role?: string | null; isActive?: boolean; nameConfirmed?: boolean } = {};
 
   if (typeof body.password === "string" && body.password.length > 0) {
     const minPasswordLength = await getMinPasswordLength();
@@ -37,6 +42,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
   if (body.isActive !== undefined) {
     data.isActive = body.isActive;
   }
+
+  if (typeof body.nameConfirmed === "boolean") data.nameConfirmed = body.nameConfirmed;
 
   // Guardrail: never leave zero active admins (mirrors spec §11 "Last admin").
   const losingAdmin =

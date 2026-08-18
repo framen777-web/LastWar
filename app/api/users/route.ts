@@ -21,6 +21,7 @@ export async function GET() {
       effectiveRole: effectiveRole(m),
       hasPassword: !!m.passwordHash,
       isActive: m.isActive,
+      nameConfirmed: m.nameConfirmed,
     })),
   });
 }

@@ -13,7 +13,7 @@ export async function matchMember(rawName: string): Promise<number> {
 
   const name = stripAllianceTag(rawName);
   try {
-    const created = await prisma.member.create({ data: { name } });
+    const created = await prisma.member.create({ data: { name, nameConfirmed: false } });
     return created.id;
   } catch (err) {
     // Two confirms/uploads racing on the same brand-new name (e.g. confirming several

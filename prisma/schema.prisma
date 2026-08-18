@@ -30,8 +30,13 @@ model Member {
   // (derive from allianceRank, see lib/auth/roles.ts); non-null = manual override.
   passwordHash String?
   role         String?
-  isActive     Boolean  @default(true)
-  theme        String   @default("default")
+  isActive     Boolean @default(true)
+  theme        String  @default("default")
+
+  // false = auto-created by the screenshot pipeline and not yet reviewed by an
+  // admin (see lib/pipeline/matchMember.ts). Existing rows default to true so
+  // this doesn't retroactively flag your whole current roster.
+  nameConfirmed Boolean @default(true)
 
   // Self-reported, optional - so an admin has a way to reach a member who's locked out to
   // arrange a manual password reset (Setup -> Users already lets an admin set a new
@@ -195,19 +200,19 @@ model ConductorRound {
 // fewer submissions than a rule's rank that week) still gets a row the admin can fill
 // in via override, instead of silently having no row at all.
 model ConductorSelection {
-  id                Int      @id @default(autoincrement())
+  id                Int            @id @default(autoincrement())
   roundId           Int
   round             ConductorRound @relation(fields: [roundId], references: [id])
   memberId          Int?
-  member            Member?  @relation(fields: [memberId], references: [id])
+  member            Member?        @relation(fields: [memberId], references: [id])
   role              String // "conductor" | "passenger"
   slotIndex         Int // 0-based day within the cycle
   weekNumber        Int // which in-cycle week this slot's data was evaluated against
   pointsAtSelection Float? // conductor only
   sourceCategoryKey String? // passenger only - null means "random"
   sourceRank        Int? // passenger only
-  manualOverride    Boolean  @default(false)
-  createdAt         DateTime @default(now())
+  manualOverride    Boolean        @default(false)
+  createdAt         DateTime       @default(now())
 
   @@unique([roundId, slotIndex, role])
 }
