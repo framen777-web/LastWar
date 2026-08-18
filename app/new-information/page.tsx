@@ -11,7 +11,7 @@ export default async function NewInformationPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Uploads</h1>
-      <div className="flex flex-col gap-3 max-w-sm">
+      <div className="flex flex-col gap-3 max-w-sm mx-auto">
         {visible("uploads-image-uploads") && <MenuButton href="/upload" label="Image uploads" description="Upload screenshots" />}
         {visible("uploads-review") && <MenuButton href="/dashboard" label="Upload review" description="Member stats for a given week" />}
         {visible("uploads-multi-event-review") && (

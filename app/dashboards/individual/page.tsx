@@ -10,7 +10,7 @@ export default async function IndividualDashboardHubPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Individual Dashboard</h1>
 
-      <div className="flex flex-col gap-3 max-w-sm">
+      <div className="flex flex-col gap-3 max-w-sm mx-auto">
         {visible("individual-detail-list") && (
           <MenuButton
             href="/dashboards/individual/detail"

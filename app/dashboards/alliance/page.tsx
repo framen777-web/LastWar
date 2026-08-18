@@ -10,7 +10,7 @@ export default async function AllianceReportsHubPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Alliance Reports</h1>
 
-      <div className="flex flex-col gap-3 max-w-sm">
+      <div className="flex flex-col gap-3 max-w-sm mx-auto">
         {visible("alliance-detail-report") && (
           <MenuButton
             href="/dashboards/alliance/detail"

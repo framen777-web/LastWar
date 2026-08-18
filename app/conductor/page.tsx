@@ -32,7 +32,7 @@ export default async function ConductorPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Conductor</h1>
 
-      <div className="flex flex-col gap-3 max-w-sm">
+      <div className="flex flex-col gap-3 max-w-sm mx-auto">
         {visible("conductor-select") && (
           <MenuButton
             href="/conductor/select"
