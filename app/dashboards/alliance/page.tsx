@@ -25,7 +25,7 @@ export default async function AllianceReportsHubPage() {
           <MenuButton
             href="/dashboards/alliance/graphs"
             label="Graphs"
-            description="Coming soon"
+            description="Bar graphs of alliance stats over time"
             icon="📈"
             accentKey="alliance-graphs"
             index={1}

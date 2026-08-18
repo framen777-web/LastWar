@@ -14,7 +14,7 @@ export default async function SetupPage() {
           <MenuButton
             href="/settings"
             label="General"
-            description="WhatsApp number and other app preferences"
+            description="Password rules, week 1 start date, and API key"
             icon="🔧"
             accentKey="setup-general"
             index={0}
