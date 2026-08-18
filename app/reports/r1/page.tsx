@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
-import { ZoomWrapper } from "@/components/ZoomWrapper";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
+import { NumberStepper } from "@/components/NumberStepper";
 import { SuggestionSelect } from "@/components/SuggestionSelect";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { getMemberWeekRows } from "@/lib/mvp/data";
@@ -214,44 +216,34 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">R1 Report</h1>
 
-      <form className="flex items-center gap-2 text-sm flex-wrap">
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="r1-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
-        <datalist id="r1-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <form className="flex items-center gap-2 contents">
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="r1-known-weeks" />
+          <datalist id="r1-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <label htmlFor="rank" className="font-medium">
-          Rank
-        </label>
-        <input
-          id="rank"
-          name="rank"
-          type="number"
-          min={1}
-          max={5}
-          defaultValue={selectedRank}
-          className="border border-neutral-300 rounded px-2 py-1 w-16"
-        />
+          <label htmlFor="rank" className="font-medium">
+            Rank
+          </label>
+          <NumberStepper id="rank" name="rank" defaultValue={selectedRank} min={1} max={5} className="w-8" />
 
-        <LimitSelect defaultValue={selectedLimit} />
+          <LimitSelect defaultValue={selectedLimit} />
 
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
-      </form>
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+        </form>
+
+        <ZoomControl />
+        <ShareReportButton targetId="r1-report-content" filename="r1-report.png" title="R1 Report" />
+      </div>
 
       <ZoomWrapper contentId="r1-report-content">
         <div className="flex flex-col gap-6">
@@ -288,6 +280,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           </div>
         </div>
       </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

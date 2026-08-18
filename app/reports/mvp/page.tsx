@@ -1,4 +1,6 @@
-import { ZoomWrapper } from "@/components/ZoomWrapper";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
+import { NumberStepper } from "@/components/NumberStepper";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { getMemberWeekRows } from "@/lib/mvp/data";
@@ -113,41 +115,39 @@ export default async function MvpReportPage({ searchParams }: PageProps<"/report
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">MVP Report</h1>
 
-      <form className="flex items-center gap-2 text-sm flex-wrap">
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="mvp-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
-        <datalist id="mvp-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <form className="flex items-center gap-2 contents">
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="mvp-known-weeks" />
+          <datalist id="mvp-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <label htmlFor="limit" className="font-medium">
-          Show
-        </label>
-        <select id="limit" name="limit" defaultValue={selectedLimit} className="border border-neutral-300 rounded px-2 py-1">
-          {LIMIT_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              Top {n}
-            </option>
-          ))}
-          <option value="all">All</option>
-        </select>
+          <label htmlFor="limit" className="font-medium">
+            Show
+          </label>
+          <select id="limit" name="limit" defaultValue={selectedLimit} className="border border-neutral-300 rounded px-2 py-1">
+            {LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                Top {n}
+              </option>
+            ))}
+            <option value="all">All</option>
+          </select>
 
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
-      </form>
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+        </form>
+
+        <ZoomControl />
+        <ShareReportButton targetId="mvp-report-content" filename="mvp-report.png" title="MVP Report" />
+      </div>
 
       {scored.length === 0 ? (
         <p className="text-neutral-500 text-sm">No data for week {selectedWeek}.</p>
@@ -164,6 +164,7 @@ export default async function MvpReportPage({ searchParams }: PageProps<"/report
           />
         </ZoomWrapper>
       )}
+      </ZoomProvider>
     </div>
   );
 }

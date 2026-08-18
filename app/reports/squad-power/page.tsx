@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/db";
-import { ZoomWrapper } from "@/components/ZoomWrapper";
-import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
-import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
+import { NumberStepper } from "@/components/NumberStepper";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
-import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
-import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
@@ -126,21 +125,6 @@ async function getSquadPowerReport(week: number, limit: string): Promise<{ rows:
   return { rows: applyLimit(rows, limit), priorWeek };
 }
 
-function formatShareText(week: number, rows: Row[]): string {
-  const lines = [`*Squad Power & Growth - Week ${week}*`, ""];
-  if (rows.length === 0) {
-    lines.push("None");
-  } else {
-    for (const r of rows) {
-      const growth = r.growth === null ? "—" : `${r.growth.toFixed(2)}%`;
-      lines.push(
-        `${r.name}: ${formatStatNumber(r.thisStats.threeSum)} (Top: ${r.squadType ?? "—"} ${formatStatNumber(r.thisStats.topValue)}) Growth: ${growth}`
-      );
-    }
-  }
-  return lines.join("\n").trim();
-}
-
 export default async function SquadPowerPage({ searchParams }: PageProps<"/reports/squad-power">) {
   await requireMenuAccess("reports-squads");
   const params = await searchParams;
@@ -161,9 +145,6 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
 
   const { rows, priorWeek } = await getSquadPowerReport(selectedWeek, selectedLimit);
 
-  const shareText = formatShareText(selectedWeek, rows);
-  const shareUrl = await getWhatsappShareUrl(shareText);
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Squad Power &amp; Growth</h1>
@@ -172,35 +153,28 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
         4 troop types. Growth compares 3 Squad power to {priorWeek ?? "the previous"} week.
       </p>
 
-      <form className="flex items-center gap-2 text-sm">
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="squad-power-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
-        <datalist id="squad-power-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <form className="flex items-center gap-2 contents">
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="squad-power-known-weeks" />
+          <datalist id="squad-power-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <LimitSelect defaultValue={selectedLimit} />
+          <LimitSelect defaultValue={selectedLimit} />
 
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
-      </form>
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+        </form>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <ShareToWhatsApp url={shareUrl} />
-        <ShareScreenshotToWhatsApp targetId="squad-power-content" filename="squad-power.png" title="Squad Power & Growth" />
+        <ZoomControl />
+        <ShareReportButton targetId="squad-power-content" filename="squad-power.png" title="Squad Power & Growth" />
       </div>
 
       <ZoomWrapper contentId="squad-power-content">
@@ -210,6 +184,7 @@ export default async function SquadPowerPage({ searchParams }: PageProps<"/repor
           <DataTable columns={SQUAD_POWER_COLUMNS} rows={squadPowerRows(rows)} defaultSort={{ key: "thisSum", direction: "desc" }} dense fitContent />
         )}
       </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

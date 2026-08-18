@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/db";
-import { ZoomWrapper } from "@/components/ZoomWrapper";
-import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
-import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
+import { NumberStepper } from "@/components/NumberStepper";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
-import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
-import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
@@ -141,46 +140,6 @@ async function getLatestCumulative(categoryKey: string, limit: string) {
   );
 }
 
-function formatShareText(
-  categoryLabel: string,
-  week: number,
-  thisWeek: { name: string; value: number }[],
-  last5: { name: string; total: number }[],
-  last10: { name: string; total: number }[],
-  improvement: { name: string; pct: number }[],
-  allTime: { name: string; value: number }[],
-  allTimeLabel: string
-): string {
-  const top = (rows: { name: string; value: number }[]) =>
-    rows
-      .slice(0, 10)
-      .map((r, i) => `${i + 1}. ${r.name}: ${formatStatNumber(r.value)}`)
-      .join("\n") || "None";
-
-  const lines = [
-    `*${categoryLabel} Leaderboard - Week ${week}*`,
-    "",
-    "_This week_",
-    top(thisWeek),
-    "",
-    "_Last 5 weeks_",
-    top(last5.map((r) => ({ name: r.name, value: r.total }))),
-    "",
-    "_Last 10 weeks_",
-    top(last10.map((r) => ({ name: r.name, value: r.total }))),
-    "",
-    "_Improvement_",
-    improvement
-      .slice(0, 10)
-      .map((r, i) => `${i + 1}. ${r.name}: ${r.pct}%`)
-      .join("\n") || "None",
-    "",
-    `_${allTimeLabel}_`,
-    top(allTime),
-  ];
-  return lines.join("\n").trim();
-}
-
 export default async function LeaderboardPage({ searchParams }: PageProps<"/reports/leaderboard">) {
   await requireMenuAccess("reports-leaderboard");
   const params = await searchParams;
@@ -219,18 +178,6 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
   const allTimeLabel = selectedCategory.cumulative ? `Total ${selectedCategory.label}` : `All time ${limitLabel}`;
   const allTimeValueLabel = selectedCategory.cumulative ? `All ${selectedCategory.label}` : "Total Score";
 
-  const shareText = formatShareText(
-    selectedCategory.label,
-    selectedWeek,
-    thisWeek,
-    last5,
-    last10,
-    improvement,
-    allTime.map((r) => ({ name: r.name, value: r.value })),
-    allTimeLabel
-  );
-  const shareUrl = await getWhatsappShareUrl(shareText);
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Leaderboards</h1>
@@ -241,51 +188,44 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
         </p>
       )}
 
-      <form className="flex items-center gap-2 text-sm flex-wrap">
-        <label htmlFor="category" className="font-medium">
-          Category
-        </label>
-        <select
-          id="category"
-          name="category"
-          defaultValue={selectedCategory.key}
-          className="border border-neutral-300 rounded px-2 py-1"
-        >
-          {LEADERBOARD_CATEGORIES.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <form className="flex items-center gap-2 contents">
+          <label htmlFor="category" className="font-medium">
+            Category
+          </label>
+          <select
+            id="category"
+            name="category"
+            defaultValue={selectedCategory.key}
+            className="border border-neutral-300 rounded px-2 py-1"
+          >
+            {LEADERBOARD_CATEGORIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
 
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="leaderboard-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
-        <datalist id="leaderboard-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="leaderboard-known-weeks" />
+          <datalist id="leaderboard-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <LimitSelect defaultValue={selectedLimit} />
+          <LimitSelect defaultValue={selectedLimit} />
 
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
-      </form>
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+        </form>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <ShareToWhatsApp url={shareUrl} />
-        <ShareScreenshotToWhatsApp
+        <ZoomControl />
+        <ShareReportButton
           targetId="leaderboard-content"
           filename={`leaderboard-${selectedCategory.key}.png`}
           title={`${selectedCategory.label} Leaderboard`}
@@ -367,6 +307,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
         </Panel>
       </div>
       </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

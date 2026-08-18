@@ -1,16 +1,76 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 const MIN_ZOOM = 35;
 const MAX_ZOOM = 100;
 const BOTTOM_MARGIN = 16;
 
-export function ZoomWrapper({ children, contentId }: { children: React.ReactNode; contentId?: string }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
+type ZoomState = { zoom: number; auto: boolean; setZoom: (z: number) => void; setAuto: (a: boolean) => void };
+const ZoomContext = createContext<ZoomState | null>(null);
+
+/**
+ * Optional - wrap a filter row (containing <ZoomControl/>) and a <ZoomWrapper> together in
+ * this when you want the "View %" control placed somewhere other than ZoomWrapper's own
+ * default spot directly above the content, e.g. inlined into a page's filter row. Without
+ * it, ZoomWrapper manages its own zoom state and renders its own control in its usual
+ * position - every page not using ZoomProvider keeps working exactly as before.
+ */
+export function ZoomProvider({ children }: { children: React.ReactNode }) {
   const [zoom, setZoom] = useState(100);
   const [auto, setAuto] = useState(true);
+  return <ZoomContext.Provider value={{ zoom, auto, setZoom, setAuto }}>{children}</ZoomContext.Provider>;
+}
+
+function ZoomControlMarkup({ zoom, auto, setZoom, setAuto }: ZoomState) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <label htmlFor="view-zoom" className="font-medium">
+        View %
+      </label>
+      <input
+        id="view-zoom"
+        type="number"
+        min={10}
+        max={200}
+        value={zoom}
+        onChange={(e) => {
+          setAuto(false);
+          setZoom(Number(e.target.value) || 100);
+        }}
+        className="border border-neutral-300 rounded px-2 py-1 w-20"
+      />
+      {!auto && (
+        <button type="button" onClick={() => setAuto(true)} className="text-xs text-accent underline decoration-dotted">
+          Reset to auto-fit
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Renders the "View %" control on its own, reading/writing the nearest <ZoomProvider>'s
+ * state - only useful together with ZoomProvider; renders nothing without one. */
+export function ZoomControl() {
+  const ctx = useContext(ZoomContext);
+  if (!ctx) return null;
+  return <ZoomControlMarkup {...ctx} />;
+}
+
+export function ZoomWrapper({ children, contentId }: { children: React.ReactNode; contentId?: string }) {
+  const ctx = useContext(ZoomContext);
+  const [localZoom, setLocalZoom] = useState(100);
+  const [localAuto, setLocalAuto] = useState(true);
+
+  // Falls back to its own local state when there's no surrounding ZoomProvider - that's
+  // what keeps every existing caller working unmodified.
+  const zoom = ctx ? ctx.zoom : localZoom;
+  const auto = ctx ? ctx.auto : localAuto;
+  const setZoom = ctx ? ctx.setZoom : setLocalZoom;
+  const setAuto = ctx ? ctx.setAuto : setLocalAuto;
+
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const outer = outerRef.current;
@@ -54,32 +114,11 @@ export function ZoomWrapper({ children, contentId }: { children: React.ReactNode
       ro.disconnect();
       window.removeEventListener("resize", recompute);
     };
-  }, [auto]);
+  }, [auto, setZoom]);
 
   return (
     <div ref={outerRef} className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-sm">
-        <label htmlFor="view-zoom" className="font-medium">
-          View %
-        </label>
-        <input
-          id="view-zoom"
-          type="number"
-          min={10}
-          max={200}
-          value={zoom}
-          onChange={(e) => {
-            setAuto(false);
-            setZoom(Number(e.target.value) || 100);
-          }}
-          className="border border-neutral-300 rounded px-2 py-1 w-20"
-        />
-        {!auto && (
-          <button type="button" onClick={() => setAuto(true)} className="text-xs text-accent underline decoration-dotted">
-            Reset to auto-fit
-          </button>
-        )}
-      </div>
+      {!ctx && <ZoomControlMarkup zoom={zoom} auto={auto} setZoom={setZoom} setAuto={setAuto} />}
       {/* CSS zoom (not transform: scale) so the layout actually reflows smaller -
           no leftover blank space the way scale() would leave. */}
       <div ref={innerRef} id={contentId} style={{ zoom: `${zoom}%` }}>

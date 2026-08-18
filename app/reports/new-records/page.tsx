@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/db";
-import { ZoomWrapper } from "@/components/ZoomWrapper";
-import { ShareToWhatsApp } from "@/components/ShareToWhatsApp";
-import { ShareScreenshotToWhatsApp } from "@/components/ShareScreenshotToWhatsApp";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
+import { NumberStepper } from "@/components/NumberStepper";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
-import { formatStatNumber, pickNumberFormat, formatWithRule } from "@/lib/format";
-import { getWhatsappShareUrl } from "@/lib/whatsapp";
+import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
@@ -98,22 +97,6 @@ async function getNewRecords(categoryKey: string, cumulative: boolean, week: num
   return applyLimit(records, limit);
 }
 
-function formatShareText(week: number, byCategory: { label: string; records: RecordRow[] }[]): string {
-  const lines = [`*New Records - Week ${week}*`, ""];
-  for (const { label, records } of byCategory) {
-    lines.push(`*${label}*`);
-    if (records.length === 0) {
-      lines.push("None");
-    } else {
-      for (const r of records) {
-        lines.push(`${r.name}: ${formatStatNumber(r.newValue)} (was ${formatStatNumber(r.oldValue)}, +${r.increasePct}%)`);
-      }
-    }
-    lines.push("");
-  }
-  return lines.join("\n").trim();
-}
-
 export default async function NewRecordsPage({ searchParams }: PageProps<"/reports/new-records">) {
   await requireMenuAccess("reports-new-records");
   const params = await searchParams;
@@ -141,12 +124,6 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
     NEW_RECORDS_CATEGORIES.map((c) => getNewRecords(c.key, cumulativeByKey.get(c.key) ?? false, selectedWeek, selectedLimit))
   );
 
-  const shareText = formatShareText(
-    selectedWeek,
-    NEW_RECORDS_CATEGORIES.map((c, i) => ({ label: c.label, records: newRecordsByCategory[i] }))
-  );
-  const shareUrl = await getWhatsappShareUrl(shareText);
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">New Records</h1>
@@ -154,35 +131,28 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
         Members who beat their own personal best this week, for each category.
       </p>
 
-      <form className="flex items-center gap-2 text-sm">
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <input
-          id="week"
-          name="week"
-          type="number"
-          min={1}
-          defaultValue={selectedWeek}
-          list="reports-known-weeks"
-          className="border border-neutral-300 rounded px-2 py-1 w-24"
-        />
-        <datalist id="reports-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <form className="flex items-center gap-2 contents">
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="reports-known-weeks" />
+          <datalist id="reports-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <LimitSelect defaultValue={selectedLimit} />
+          <LimitSelect defaultValue={selectedLimit} />
 
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
-      </form>
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
+        </form>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <ShareToWhatsApp url={shareUrl} />
-        <ShareScreenshotToWhatsApp targetId="new-records-content" filename="new-records.png" title="New Records" />
+        <ZoomControl />
+        <ShareReportButton targetId="new-records-content" filename="new-records.png" title="New Records" />
       </div>
 
       <ZoomWrapper contentId="new-records-content">
@@ -208,6 +178,7 @@ export default async function NewRecordsPage({ searchParams }: PageProps<"/repor
           })}
         </div>
       </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

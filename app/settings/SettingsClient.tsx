@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 export function SettingsClient() {
-  const [whatsappNumber, setWhatsappNumber] = useState("");
   const [minPasswordLength, setMinPasswordLength] = useState("8");
   const [week1StartDate, setWeek1StartDate] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -18,7 +17,6 @@ export function SettingsClient() {
     fetch("/api/settings")
       .then((res) => res.json())
       .then((data) => {
-        setWhatsappNumber(data.settings?.whatsappNumber ?? "");
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
         setWeek1StartDate(data.settings?.week1StartDate ?? "");
         setGeminiApiKeySet(!!data.geminiApiKeySet);
@@ -41,7 +39,6 @@ export function SettingsClient() {
     }
 
     const body: Record<string, string> = {
-      whatsappNumber: whatsappNumber.replace(/[^0-9]/g, ""),
       minPasswordLength: String(minLength),
       week1StartDate,
       generalPassword,
@@ -67,28 +64,6 @@ export function SettingsClient() {
       <h1 className="text-xl font-semibold">Settings</h1>
 
       <form onSubmit={handleSave} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="whatsapp" className="text-sm font-medium">
-            WhatsApp number
-          </label>
-          <input
-            id="whatsapp"
-            type="tel"
-            value={whatsappNumber}
-            onChange={(e) => {
-              setWhatsappNumber(e.target.value);
-              setSaved(false);
-            }}
-            placeholder="e.g. 27821234567"
-            disabled={loading}
-            className="border border-neutral-300 rounded px-3 py-2"
-          />
-          <p className="text-neutral-500 text-xs">
-            Country code + number, digits only, no leading + or 0 (e.g. a South African 082 123 4567 becomes
-            27821234567). Used by the "Share to WhatsApp" button on reports.
-          </p>
-        </div>
-
         <div className="flex flex-col gap-1">
           <label htmlFor="minPasswordLength" className="text-sm font-medium">
             Minimum password length

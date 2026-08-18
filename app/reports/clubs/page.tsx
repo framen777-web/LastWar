@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { ZoomWrapper } from "@/components/ZoomWrapper";
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH } from "@/lib/reportLayout";
 import { requireMenuAccess } from "@/lib/menuAccess";
@@ -71,6 +72,12 @@ export default async function ClubsPage() {
         member has landed in that tier, not just whether they&apos;ve ever reached it.
       </p>
 
+      <ZoomProvider>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <ZoomControl />
+        <ShareReportButton targetId="clubs-content" filename="vs-clubs.png" title="VS Clubs" />
+      </div>
+
       <ZoomWrapper contentId="clubs-content">
         <div className="flex flex-row flex-nowrap items-start gap-4">
           {byTier.map(({ tier, rows }) => (
@@ -85,6 +92,7 @@ export default async function ClubsPage() {
           ))}
         </div>
       </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

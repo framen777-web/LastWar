@@ -37,12 +37,6 @@ const MODERN_COLOR_FN_G = /\b(?:oklch|lab|lch|color|hwb)\([^()]*\)/g;
 // html2canvas equally can't parse. The canvas 2D API can resolve *any* valid CSS color
 // into a plain rgb() string, so round-tripping every matched color function through a
 // scratch canvas normalizes them before capture.
-//
-// Setting fillStyle to a color-function string and reading it back does NOT reliably
-// downgrade it to rgb() on current Chrome - the fillStyle getter now preserves whatever
-// CSS Color 4 syntax it was given, so a lab()/oklch() input comes back out unchanged.
-// Actually rasterizing a pixel and reading its resolved bytes back always yields a
-// concrete sRGB value regardless of the input color space, so that's used instead.
 function createColorResolver(): (colorFn: string) => string {
   const canvas = document.createElement("canvas");
   canvas.width = 1;
@@ -78,7 +72,14 @@ function normalizeColors(root: HTMLElement, resolve: (colorFn: string) => string
   }
 }
 
-export function ShareScreenshotToWhatsApp({
+/**
+ * One generic "Share" button for a report, not tied to any specific platform -
+ * navigator.share() with a captured image file already opens the OS's native share sheet,
+ * which lists WhatsApp alongside every other installed app that accepts an image, so no
+ * platform-specific branching is needed. Falls back to downloading the PNG on
+ * browsers/devices without file-sharing support.
+ */
+export function ShareReportButton({
   targetId,
   filename = "report.png",
   title = "Report",
@@ -118,10 +119,9 @@ export function ShareScreenshotToWhatsApp({
       // overflow past their block-level container's own box, which doesn't grow to fit
       // them. That crops everything past the container's edge, worse on a narrow phone
       // where the container itself is much narrower than the report. scrollWidth/Height
-      // reflect the true content extent including that overflow (the same measurement
-      // ZoomWrapper already uses for its own auto-fit sizing), and windowWidth/Height keep
-      // html2canvas's simulated viewport wide enough that nothing wraps or clips during
-      // the off-screen layout pass either.
+      // reflect the true content extent including that overflow, and windowWidth/Height
+      // keep html2canvas's simulated viewport wide enough that nothing wraps or clips
+      // during the off-screen layout pass either.
       const captureWidth = el.scrollWidth;
       const captureHeight = el.scrollHeight;
 
@@ -150,7 +150,7 @@ export function ShareScreenshotToWhatsApp({
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
-        alert("Your browser can't share files directly - the image was downloaded instead. Attach it to WhatsApp manually.");
+        alert("Your browser can't share files directly - the image was downloaded instead.");
       }
     } finally {
       el.style.zoom = prevZoom;
@@ -160,11 +160,12 @@ export function ShareScreenshotToWhatsApp({
 
   return (
     <button
+      type="button"
       onClick={handleShare}
       disabled={busy}
-      className="inline-flex items-center gap-1.5 bg-green-500 text-white rounded px-3 py-1.5 text-sm hover:bg-green-600 disabled:opacity-50 self-start"
+      className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
     >
-      {busy ? "Preparing image…" : "Share screenshot"}
+      {busy ? "Preparing…" : "Share"}
     </button>
   );
 }
