@@ -126,6 +126,17 @@ model Suggestion {
   @@unique([memberId, weekNumber])
 }
 
+// Per-week window length for the R1 report's bottom panel, so a week's report stays
+// reproducible after the global default changes later. Resolved lazily: the first time a
+// week is viewed, whatever the global default was gets pinned here and reused on every
+// later view of that same week. An admin can also explicitly override one week's window
+// from the report toolbar, which overwrites the pin directly.
+model R1WeekSettings {
+  weekNumber        Int      @id
+  bottomWeeksWindow Int
+  updatedAt         DateTime @updatedAt
+}
+
 model RawExtraction {
   id            Int      @id @default(autoincrement())
   imageFilename String

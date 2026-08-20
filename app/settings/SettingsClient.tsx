@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export function SettingsClient() {
   const [minPasswordLength, setMinPasswordLength] = useState("8");
+  const [r1BottomWeeksWindow, setR1BottomWeeksWindow] = useState("5");
   const [week1StartDate, setWeek1StartDate] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [geminiApiKeySet, setGeminiApiKeySet] = useState(false);
@@ -18,6 +19,7 @@ export function SettingsClient() {
       .then((res) => res.json())
       .then((data) => {
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
+        setR1BottomWeeksWindow(data.settings?.r1BottomWeeksWindow ?? "5");
         setWeek1StartDate(data.settings?.week1StartDate ?? "");
         setGeminiApiKeySet(!!data.geminiApiKeySet);
         setGeneralPassword(data.settings?.generalPassword ?? "");
@@ -40,6 +42,7 @@ export function SettingsClient() {
 
     const body: Record<string, string> = {
       minPasswordLength: String(minLength),
+      r1BottomWeeksWindow: String(Math.max(1, Number(r1BottomWeeksWindow) || 5)),
       week1StartDate,
       generalPassword,
     };
@@ -81,6 +84,29 @@ export function SettingsClient() {
             className="border border-neutral-300 rounded px-3 py-2 w-32"
           />
           <p className="text-neutral-500 text-xs">Applies to admin setup, self-service password changes, and Setup → Users.</p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="r1BottomWeeksWindow" className="text-sm font-medium">
+            R1 default bottom panel weeks
+          </label>
+          <input
+            id="r1BottomWeeksWindow"
+            type="number"
+            min={1}
+            value={r1BottomWeeksWindow}
+            onChange={(e) => {
+              setR1BottomWeeksWindow(e.target.value);
+              setSaved(false);
+            }}
+            disabled={loading}
+            className="border border-neutral-300 rounded px-3 py-2 w-32"
+          />
+          <p className="text-neutral-500 text-xs">
+            Default averaging window for the R1 report&apos;s bottom panel. Only affects weeks that haven&apos;t
+            been viewed yet - once a week&apos;s report has been generated, its own window is pinned and this
+            default no longer affects it.
+          </p>
         </div>
 
         <div className="flex flex-col gap-1">

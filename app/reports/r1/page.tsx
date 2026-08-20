@@ -8,6 +8,7 @@ import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp, type ScoredRow } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
 import { requireMenuAccess } from "@/lib/menuAccess";
+import { resolveBottomWeeksWindow } from "@/lib/reports/r1Settings";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
 
@@ -80,11 +81,19 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const weekParam = Array.isArray(params.week) ? params.week[0] : params.week;
   const selectedWeek = weekParam ? Number(weekParam) : defaultWeek;
 
+  // "Active" = has at least one recorded value for the selected week - deliberately not
+  // Member.isActive, which reflects the most recently completed week, not whichever week
+  // this report happens to be viewing.
+  const activeMemberIdsThisWeek = new Set(rows.filter((r) => r.weekNumber === selectedWeek).map((r) => r.memberId));
+
   const rankParam = Array.isArray(params.rank) ? params.rank[0] : params.rank;
   const selectedRank = rankParam ? Number(rankParam) : 1;
 
   const selectedLimit = parseLimitParam(params.limit, "10");
   const bottomLabel = selectedLimit === "all" ? "Bottom all" : `Bottom ${selectedLimit}`;
+
+  const weeksParam = Array.isArray(params.weeks) ? params.weeks[0] : params.weeks;
+  const bottomWeeksWindow = await resolveBottomWeeksWindow(selectedWeek, isAdmin && weeksParam ? Number(weeksParam) : undefined);
 
   const members = await prisma.member.findMany({ select: { id: true, name: true, allianceRank: true } });
 
@@ -94,7 +103,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   // Panel A - "Current Ranked {n}": members at that rank, prior window is W-5..W-2 (4 weeks).
   const priorWeeksA = [selectedWeek - 5, selectedWeek - 4, selectedWeek - 3, selectedWeek - 2].filter((w) => w >= 1);
   const panelA = members
-    .filter((m) => m.allianceRank === `R${selectedRank}`)
+    .filter((m) => m.allianceRank === `R${selectedRank}` && activeMemberIdsThisWeek.has(m.id))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((m) => {
       const thisWeek = mvpMap.get(`${m.id}:${selectedWeek}`) ?? null;
@@ -112,12 +121,14 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
       };
     });
 
-  // Panel B - "Bottom 10 over 5 weeks": members present in W, mean MVP over W-4..W (5 weeks, inclusive).
-  const windowB = [selectedWeek - 4, selectedWeek - 3, selectedWeek - 2, selectedWeek - 1, selectedWeek].filter((w) => w >= 1);
+  // Panel B - "Bottom N over {bottomWeeksWindow} weeks": members present in W, mean MVP over
+  // the trailing bottomWeeksWindow weeks ending at W (inclusive).
+  const windowB = Array.from({ length: bottomWeeksWindow }, (_, i) => selectedWeek - bottomWeeksWindow + 1 + i).filter((w) => w >= 1);
   const windowVSForB = windowB.filter((w) => w !== selectedWeek);
 
   const presentThisWeek = scoredAll.filter((r) => {
     if (r.weekNumber !== selectedWeek) return false;
+    if (!activeMemberIdsThisWeek.has(r.memberId)) return false;
     const firstWeek = firstWeekByMember.get(r.memberId);
     if (firstWeek === undefined) return true; // no history at all - shouldn't happen, don't hide unexpectedly
     return selectedWeek - firstWeek + 1 >= 5;
@@ -252,6 +263,15 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           </label>
           <NumberStepper id="rank" name="rank" defaultValue={selectedRank} min={1} max={5} className="w-8" />
 
+          {isAdmin && (
+            <>
+              <label htmlFor="weeks" className="font-medium">
+                Weeks
+              </label>
+              <NumberStepper id="weeks" name="weeks" defaultValue={bottomWeeksWindow} min={1} className="w-8" />
+            </>
+          )}
+
           <LimitSelect defaultValue={selectedLimit} />
         </form>
 
@@ -278,7 +298,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           </div>
 
           <div className="border border-neutral-200 rounded overflow-hidden">
-            <div className="report-panel-header bg-pink-300 px-3 py-1 font-semibold">{bottomLabel} over 5 weeks</div>
+            <div className="report-panel-header bg-pink-300 px-3 py-1 font-semibold">{bottomLabel} over {bottomWeeksWindow} weeks</div>
             {panelBLimited.length === 0 ? (
               <p className="text-neutral-500 text-sm p-2">No data for week {selectedWeek}.</p>
             ) : (
