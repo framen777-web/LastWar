@@ -104,6 +104,10 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
       </p>
 
       <form className="flex items-center gap-2 text-sm flex-wrap">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="category" className="font-medium">
           Category
         </label>
@@ -119,10 +123,6 @@ export default async function MultiTablePage({ searchParams }: PageProps<"/dashb
             </option>
           ))}
         </select>
-
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
 
         <label htmlFor="week" className="font-medium">
           Week

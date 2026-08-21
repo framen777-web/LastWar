@@ -73,6 +73,9 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
       <div className="flex items-center justify-between gap-3 flex-wrap">
         {canPickAnyMember ? (
           <form className="flex items-center gap-2 text-sm flex-wrap">
+            <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+              Go
+            </button>
             <label htmlFor="member" className="font-medium">
               Member
             </label>
@@ -83,9 +86,6 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
                 </option>
               ))}
             </select>
-            <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-              Go
-            </button>
           </form>
         ) : (
           <p className="text-sm text-neutral-500">

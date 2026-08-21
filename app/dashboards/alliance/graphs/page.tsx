@@ -58,6 +58,10 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
       <h1 className="text-xl font-semibold">Graphs</h1>
 
       <form className="flex items-center gap-2 text-sm flex-wrap">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="metric" className="font-medium">
           Field
         </label>
@@ -104,10 +108,6 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
           <option value="sum">Sum</option>
           <option value="average">Average</option>
         </select>
-
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
       </form>
 
       <ZoomWrapper contentId="alliance-graph-content">

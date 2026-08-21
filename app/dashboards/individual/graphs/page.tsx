@@ -47,6 +47,10 @@ export default async function IndividualGraphsPage({ searchParams }: PageProps<"
       <h1 className="text-xl font-semibold">Graphs</h1>
 
       <form className="flex items-center gap-2 text-sm flex-wrap">
+        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+          Go
+        </button>
+
         <label htmlFor="metric" className="font-medium">
           Field
         </label>
@@ -68,10 +72,6 @@ export default async function IndividualGraphsPage({ searchParams }: PageProps<"
             </option>
           ))}
         </select>
-
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
       </form>
 
       <ZoomWrapper contentId="individual-graph-content">

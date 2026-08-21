@@ -93,7 +93,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const bottomLabel = selectedLimit === "all" ? "Bottom all" : `Bottom ${selectedLimit}`;
 
   const weeksParam = Array.isArray(params.weeks) ? params.weeks[0] : params.weeks;
-  const bottomWeeksWindow = await resolveBottomWeeksWindow(selectedWeek, isAdmin && weeksParam ? Number(weeksParam) : undefined);
+  const bottomWeeksWindow = await resolveBottomWeeksWindow(selectedWeek, weeksParam ? Number(weeksParam) : undefined);
 
   const members = await prisma.member.findMany({ select: { id: true, name: true, allianceRank: true } });
 
@@ -263,14 +263,10 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
           </label>
           <NumberStepper id="rank" name="rank" defaultValue={selectedRank} min={1} max={5} className="w-8" />
 
-          {isAdmin && (
-            <>
-              <label htmlFor="weeks" className="font-medium">
-                Weeks
-              </label>
-              <NumberStepper id="weeks" name="weeks" defaultValue={bottomWeeksWindow} min={1} className="w-8" />
-            </>
-          )}
+          <label htmlFor="weeks" className="font-medium">
+            Weeks
+          </label>
+          <NumberStepper id="weeks" name="weeks" defaultValue={bottomWeeksWindow} min={1} className="w-8" />
 
           <LimitSelect defaultValue={selectedLimit} />
         </form>
