@@ -138,6 +138,13 @@ const MENU_ITEMS = [
     parentKey: "home-conductor",
   },
   { key: "conductor-history", label: "History", href: "/conductor/history", roles: ["ADMIN", "LEADER"], parentKey: "home-conductor" },
+  {
+    key: "conductor-standings",
+    label: "Standings",
+    href: "/conductor/standings",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-conductor",
+  },
   { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
   { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"], parentKey: null },
 

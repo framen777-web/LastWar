@@ -1,32 +1,10 @@
-import { computeStandings } from "@/lib/conductor/points";
-import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MenuButton } from "@/components/MenuButton";
 import { requireMenuAccess, getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
-
-const COLUMNS: DataTableColumn[] = [
-  { key: "member", header: "Member", filter: "text" },
-  { key: "accumulated", header: "Accumulated", filter: "number" },
-  { key: "lessSelected", header: "Less Selected", filter: "number" },
-  { key: "total", header: "Total", filter: "number" },
-];
 
 export default async function ConductorPage() {
   const user = await requireMenuAccess("home-conductor");
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);
-
-  const standings = await computeStandings();
-
-  const rows: DataTableRow[] = standings.map((s) => ({
-    id: s.memberId,
-    cells: {
-      member: <span className="font-medium">{s.memberName}</span>,
-      accumulated: s.accumulated.toFixed(2),
-      lessSelected: <span className="text-neutral-500">{s.lessSelected.toFixed(2)}</span>,
-      total: <span className="font-semibold">{s.total.toFixed(2)}</span>,
-    },
-    sortValues: { member: s.memberName, accumulated: s.accumulated, lessSelected: s.lessSelected, total: s.total },
-  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,14 +31,17 @@ export default async function ConductorPage() {
             index={1}
           />
         )}
+        {visible("conductor-standings") && (
+          <MenuButton
+            href="/conductor/standings"
+            label="Standings"
+            description="Accumulated points per member"
+            icon="🏆"
+            accentKey="conductor-standings"
+            index={2}
+          />
+        )}
       </div>
-
-      <h2 className="text-lg font-semibold">Standings</h2>
-      {standings.length === 0 ? (
-        <p className="text-neutral-500 text-sm">No conductor points configured yet - set some up in Setup → Categories.</p>
-      ) : (
-        <DataTable columns={COLUMNS} rows={rows} defaultSort={{ key: "total", direction: "desc" }} />
-      )}
     </div>
   );
 }
