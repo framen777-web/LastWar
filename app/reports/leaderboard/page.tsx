@@ -164,12 +164,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
 
   const series = await getCategorySeries(selectedCategory.key, selectedCategory.cumulative);
 
+  // Only members active in the selected (indicator) week - a departed member's earlier
+  // contribution shouldn't still show up in a "last N weeks" total.
+  const activeThisWeek = new Set(series.filter((r) => r.weekNumber === selectedWeek).map((r) => r.memberId));
+  const activeSeries = series.filter((r) => activeThisWeek.has(r.memberId));
+
   const last5Weeks = recentWeeksFromSeries(series, selectedWeek, 5, true);
   const last10Weeks = recentWeeksFromSeries(series, selectedWeek, 10, true);
 
   const thisWeek = topThisWeek(series, selectedWeek, selectedLimit);
-  const last5 = topSumOverWeeks(series, last5Weeks, selectedLimit);
-  const last10 = topSumOverWeeks(series, last10Weeks, selectedLimit);
+  const last5 = topSumOverWeeks(activeSeries, last5Weeks, selectedLimit);
+  const last10 = topSumOverWeeks(activeSeries, last10Weeks, selectedLimit);
   const improvement = getImprovement(series, selectedWeek, selectedLimit);
   const allTime = selectedCategory.cumulative
     ? await getLatestCumulative(selectedCategory.key, selectedLimit)

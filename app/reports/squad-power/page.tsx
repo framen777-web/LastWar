@@ -101,7 +101,9 @@ async function getSquadPowerReport(week: number, limit: string): Promise<{ rows:
 
   const thisByMember = new Map(thisWeekRecords.map((r) => [r.memberId, r]));
   const priorByMember = new Map(priorWeekRecords.map((r) => [r.memberId, r]));
-  const allMemberIds = new Set([...thisByMember.keys(), ...priorByMember.keys()]);
+  // Only members who reported this week (the indicator week) - someone with data only in
+  // the prior week has since left and shouldn't still show up here.
+  const allMemberIds = new Set(thisByMember.keys());
 
   const rows: Row[] = [];
   for (const memberId of allMemberIds) {

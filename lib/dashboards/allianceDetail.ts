@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
+import { getActiveMemberIdsForWeek } from "@/lib/reports/activeMembers";
 
 export type AllianceCategory = { key: string; name: string; cumulative: boolean };
 
@@ -96,6 +97,17 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
     if (!membersById.has(r.memberId)) {
       const member = await prisma.member.findUnique({ where: { id: r.memberId } });
       if (member) membersById.set(r.memberId, member);
+    }
+  }
+
+  // Only members active in the indicator week (the last week of the range) - matches this
+  // report to the "the last week tells you who's still here" rule used everywhere else.
+  // Skipped when a specific commanderId is requested - that's a deliberate single-person
+  // lookup, not a roster view, so it should still work for someone who's since left.
+  if (!commanderId) {
+    const activeInToWeek = await getActiveMemberIdsForWeek(toWeek);
+    for (const memberId of [...membersById.keys()]) {
+      if (!activeInToWeek.has(memberId)) membersById.delete(memberId);
     }
   }
 
