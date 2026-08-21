@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/db";
+import { getMemberWeekRows } from "@/lib/mvp/data";
+import { computeAllMvp } from "@/lib/mvp/mvp";
+import { getWeights } from "@/lib/mvp/weights";
 
 export type AllianceCategory = { key: string; name: string; cumulative: boolean };
 
@@ -20,6 +23,7 @@ export type DetailRow = {
   rankLabel: string;
   values: Record<string, number | undefined>;
   squads: SquadsFields;
+  mvp: number | undefined;
 };
 
 export type SummaryRow = {
@@ -28,6 +32,7 @@ export type SummaryRow = {
   rankLabel: string;
   values: Record<string, number | undefined>;
   squads: SquadsFields;
+  mvp: number | undefined;
 };
 
 // Shared by the Detail Report page and its Excel export, so both modes (and both output
@@ -66,6 +71,17 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
         where: { categoryId: squadsCategory.id, weekNumber: { gte: fromWeek, lte: toWeek }, member: memberWhere },
       })
     : [];
+
+  // MVP is rank-based within a week's full population, so it must be scored against the
+  // entire roster's week rows - never the memberWhere-filtered subset - before narrowing
+  // down to the members this report's filters selected. Scoring only the filtered subset
+  // would silently change everyone's rank-based MVP score whenever a Commander/Rank filter
+  // is applied.
+  const weekRows = await getMemberWeekRows();
+  const weights = await getWeights();
+  const scoredAll = computeAllMvp(weekRows, weights);
+  const mvpByKey = new Map<string, number>(); // memberId:weekNumber -> mvp
+  for (const r of scoredAll) mvpByKey.set(`${r.memberId}:${r.weekNumber}`, r.mvp);
 
   // memberId:weekNumber:categoryKey -> value
   const valueByKey = new Map<string, number>();
@@ -107,6 +123,8 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
       }
       const squads = squadsByKey.get(`${memberId}:${week}`) ?? {};
       if (Object.keys(squads).length > 0) hasAny = true;
+      const mvp = mvpByKey.get(`${memberId}:${week}`);
+      if (mvp !== undefined) hasAny = true;
       if (!hasAny) continue;
 
       detailRows.push({
@@ -116,6 +134,7 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
         rankLabel: rankLabelForWeek(memberId, week),
         values,
         squads,
+        mvp,
       });
     }
   }
@@ -161,6 +180,14 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
       }
     }
 
+    let mvpAcc: number | undefined;
+    for (let week = fromWeek; week <= toWeek; week++) {
+      const mvp = mvpByKey.get(`${memberId}:${week}`);
+      if (mvp === undefined) continue;
+      mvpAcc = (mvpAcc ?? 0) + mvp;
+      hasAny = true;
+    }
+
     if (!hasAny) continue;
     summaryRows.push({
       memberId,
@@ -168,6 +195,7 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
       rankLabel: member.allianceRank ?? "—",
       values,
       squads,
+      mvp: mvpAcc,
     });
   }
 

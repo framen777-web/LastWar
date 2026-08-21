@@ -36,6 +36,7 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
     { key: "member", header: "Member", filter: "text", sticky: true },
     ...(mode === "detail" ? [{ key: "week", header: "Week", filter: "number" as const }] : []),
     { key: "rank", header: "Rank", filter: "text" },
+    { key: "mvp", header: "MVP", filter: "number" },
     { key: "air", header: "Air", filter: "number" },
     { key: "tank", header: "Tank", filter: "number" },
     { key: "missile", header: "Missile", filter: "number" },
@@ -56,12 +57,14 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
     const cells: Record<string, React.ReactNode> = {
       member: <span className="font-medium">{r.memberName}</span>,
       rank: <span className="text-neutral-500">{r.rankLabel}</span>,
+      mvp: <span className="font-semibold">{r.mvp !== undefined ? r.mvp.toFixed(2) : "—"}</span>,
       air: <span className="text-neutral-500">{formatWithRule(r.squads.air, airRule)}</span>,
       tank: <span className="text-neutral-500">{formatWithRule(r.squads.tank, tankRule)}</span>,
       missile: <span className="text-neutral-500">{formatWithRule(r.squads.missile, missileRule)}</span>,
       fourth: <span className="text-neutral-500">{formatWithRule(r.squads.fourth, fourthRule)}</span>,
     };
     const sortValues: Record<string, number | string> = { member: r.memberName, rank: r.rankLabel };
+    if (r.mvp !== undefined) sortValues.mvp = r.mvp;
     if (r.squads.air !== undefined) sortValues.air = r.squads.air;
     if (r.squads.tank !== undefined) sortValues.tank = r.squads.tank;
     if (r.squads.missile !== undefined) sortValues.missile = r.squads.missile;
@@ -157,8 +160,8 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
 
       <p className="text-neutral-400 text-xs">
         Summary consolidates the selected weeks per member: HQ and squad composition take the highest reading in
-        range; everything else sums (a cumulative category like Kills sums its per-week gain, not the raw running
-        total).
+        range; everything else, including MVP, sums (a cumulative category like Kills sums its per-week gain, not
+        the raw running total).
       </p>
 
       <div className="flex items-center gap-3">

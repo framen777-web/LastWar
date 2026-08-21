@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     { header: "Member", key: "member", width: 20 },
     ...(mode === "detail" ? [{ header: "Week", key: "week", width: 8 }] : []),
     { header: "Rank", key: "rank", width: 8 },
+    { header: "MVP", key: "mvp", width: 10 },
     { header: "Air", key: "air", width: 10 },
     { header: "Tank", key: "tank", width: 10 },
     { header: "Missile", key: "missile", width: 10 },
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
   for (const r of rows) {
     const rowData: Record<string, number | string> = { member: r.memberName, rank: r.rankLabel };
     if ("weekNumber" in r) rowData.week = r.weekNumber;
+    if (r.mvp !== undefined) rowData.mvp = r.mvp;
     if (r.squads.air !== undefined) rowData.air = r.squads.air;
     if (r.squads.tank !== undefined) rowData.tank = r.squads.tank;
     if (r.squads.missile !== undefined) rowData.missile = r.squads.missile;
