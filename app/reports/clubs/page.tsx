@@ -32,6 +32,7 @@ async function getVsCountsByTier(): Promise<Map<string, ClubRow[]>> {
 
   const countsByTier = new Map<string, Map<number, ClubRow>>(CLUB_TIERS.map((t) => [t.key, new Map()]));
   for (const s of stats) {
+    if (!s.member.isActive) continue;
     const tier = CLUB_TIERS.find((t) => s.value >= t.min && s.value <= t.max);
     if (!tier) continue;
     const members = countsByTier.get(tier.key)!;
