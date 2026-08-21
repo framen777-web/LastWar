@@ -89,6 +89,36 @@ function forceWhiteBlackTheme(root: HTMLElement) {
   }
 }
 
+// html2canvas can't reliably paint a <select>'s selected option text - it draws the box
+// but leaves the interior blank. Swap every select for a plain element with the same
+// text, after forceWhiteBlackTheme so it picks up the same forced black/white styling.
+function replaceSelectsWithText(root: HTMLElement) {
+  const PROPS_TO_COPY = [
+    "color",
+    "backgroundColor",
+    "border",
+    "borderRadius",
+    "padding",
+    "fontSize",
+    "fontFamily",
+    "fontWeight",
+    "lineHeight",
+  ] as const;
+
+  const selects = Array.from(root.querySelectorAll<HTMLSelectElement>("select"));
+  for (const select of selects) {
+    const text = select.options[select.selectedIndex]?.text ?? "";
+    const computed = getComputedStyle(select);
+    const replacement = document.createElement("span");
+    replacement.textContent = text || "—";
+    replacement.style.display = "inline-block";
+    for (const prop of PROPS_TO_COPY) {
+      (replacement.style as unknown as Record<string, string>)[prop] = computed[prop];
+    }
+    select.replaceWith(replacement);
+  }
+}
+
 /**
  * One generic "Share" button for a report, not tied to any specific platform -
  * navigator.share() with a captured image file already opens the OS's native share sheet,
@@ -149,6 +179,7 @@ export function ShareReportButton({
         onclone: (clonedDoc) => {
           normalizeColors(clonedDoc.body, resolveColor);
           forceWhiteBlackTheme(clonedDoc.body);
+          replaceSelectsWithText(clonedDoc.body);
         },
       });
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));

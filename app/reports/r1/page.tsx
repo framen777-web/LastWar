@@ -96,6 +96,7 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const bottomWeeksWindow = await resolveBottomWeeksWindow(selectedWeek, weeksParam ? Number(weeksParam) : undefined);
 
   const members = await prisma.member.findMany({ select: { id: true, name: true, allianceRank: true } });
+  const memberRankById = new Map(members.map((m) => [m.id, m.allianceRank]));
 
   const suggestions = await prisma.suggestion.findMany({ where: { weekNumber: selectedWeek } });
   const suggestionByMember = new Map(suggestions.map((s) => [s.memberId, s.value]));
@@ -129,6 +130,9 @@ export default async function R1ReportPage({ searchParams }: PageProps<"/reports
   const presentThisWeek = scoredAll.filter((r) => {
     if (r.weekNumber !== selectedWeek) return false;
     if (!activeMemberIdsThisWeek.has(r.memberId)) return false;
+    // R1 members are already tracked by Panel A - the bottom panel is for Watch/Demote
+    // candidates among everyone else.
+    if (memberRankById.get(r.memberId) === "R1") return false;
     const firstWeek = firstWeekByMember.get(r.memberId);
     if (firstWeek === undefined) return true; // no history at all - shouldn't happen, don't hide unexpectedly
     return selectedWeek - firstWeek + 1 >= 5;
