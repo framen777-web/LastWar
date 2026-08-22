@@ -3,8 +3,9 @@ import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
 import { getActiveMemberIdsForWeek } from "@/lib/reports/activeMembers";
+import { reduceOverRange, type SummaryMode } from "@/lib/reports/summaryMode";
 
-export type AllianceCategory = { key: string; name: string; cumulative: boolean };
+export type AllianceCategory = { key: string; name: string; cumulative: boolean; summaryMode: SummaryMode };
 
 export type AllianceFilters = {
   fromWeek: number;
@@ -48,7 +49,7 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
   const allCategories = await prisma.category.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } });
   const categories: AllianceCategory[] = allCategories
     .filter((c) => c.shape !== "free_text")
-    .map((c) => ({ key: c.key, name: c.name, cumulative: c.cumulative }));
+    .map((c) => ({ key: c.key, name: c.name, cumulative: c.cumulative, summaryMode: c.summaryMode as SummaryMode }));
   const squadsCategory = allCategories.find((c) => c.key === "squads");
 
   const memberWhere = {
@@ -151,44 +152,31 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
     }
   }
 
-  // "HQ" (the "members" category key) tracks current HQ level, not an event score -
-  // consolidating it (and squad composition) across weeks means "peak reached", i.e. max.
-  // Everything else sums: a cumulative category (Kills) sums its per-week *gains*, since
-  // summing the raw ever-increasing readings would be meaningless; anything else (VS,
-  // Donations, AE, Desert Storm, Canyon Storm, and any new category added later) sums its
-  // raw per-week values directly.
-  const MAX_CATEGORY_KEYS = new Set(["members"]);
-
   const summaryRows: SummaryRow[] = [];
   for (const [memberId, member] of membersById) {
     const values: Record<string, number | undefined> = {};
     let hasAny = false;
 
     for (const c of categories) {
-      let acc: number | undefined;
-      for (let week = fromWeek; week <= toWeek; week++) {
-        const raw = valueByKey.get(`${memberId}:${week}:${c.key}`);
-        const contribution = c.cumulative ? gain(memberId, c.key, week) : raw;
-        if (contribution === undefined) continue;
-        if (MAX_CATEGORY_KEYS.has(c.key)) {
-          acc = acc === undefined ? contribution : Math.max(acc, contribution);
-        } else {
-          acc = (acc ?? 0) + contribution;
-        }
-      }
+      // A cumulative category's "per-week contribution" has always meant the gain during
+      // that week, not the raw ever-increasing reading - true for every summaryMode, not
+      // just sum, so "selected_week" on Kills means "how many kills that week", not
+      // "lifetime kills as of that week".
+      const perWeekValue = (week: number) =>
+        c.cumulative ? gain(memberId, c.key, week) : valueByKey.get(`${memberId}:${week}:${c.key}`);
+      const acc = reduceOverRange(c.summaryMode, perWeekValue, fromWeek, toWeek);
       if (acc !== undefined) hasAny = true;
       values[c.key] = acc;
     }
 
     const squads: SquadsFields = {};
-    for (let week = fromWeek; week <= toWeek; week++) {
-      const weekSquads = squadsByKey.get(`${memberId}:${week}`);
-      if (!weekSquads) continue;
-      hasAny = true;
-      for (const field of ["air", "tank", "missile", "fourth"] as const) {
-        const v = weekSquads[field];
-        if (v === undefined) continue;
-        squads[field] = squads[field] === undefined ? v : Math.max(squads[field]!, v);
+    const squadsMode = (squadsCategory?.summaryMode as SummaryMode) ?? "selected_week";
+    for (const field of ["air", "tank", "missile", "fourth"] as const) {
+      const fieldValue = (week: number) => squadsByKey.get(`${memberId}:${week}`)?.[field];
+      const acc = reduceOverRange(squadsMode, fieldValue, fromWeek, toWeek);
+      if (acc !== undefined) {
+        squads[field] = acc;
+        hasAny = true;
       }
     }
 

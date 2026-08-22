@@ -13,6 +13,7 @@ export type CategoryInput = {
   active?: boolean;
   sortOrder?: number;
   cumulative?: boolean;
+  summaryMode?: string;
   conductorMode?: string;
   conductorPointsPerUnit?: number | null;
   conductorUnitSize?: number | null;
@@ -82,6 +83,11 @@ export function validateCategoryInput(input: CategoryInput): ValidationError[] {
         errors.push({ field: "dedupField", message: "Dedup field must be one of the stored fields." });
       }
     }
+  }
+
+  const SUMMARY_MODES = ["sum", "average", "max", "min", "selected_week"];
+  if (input.summaryMode !== undefined && !SUMMARY_MODES.includes(input.summaryMode)) {
+    errors.push({ field: "summaryMode", message: `Summary mode must be one of: ${SUMMARY_MODES.join(", ")}.` });
   }
 
   if (input.conductorMode && !["off", "rate", "flat"].includes(input.conductorMode)) {

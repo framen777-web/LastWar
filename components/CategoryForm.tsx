@@ -19,6 +19,7 @@ export type Category = {
   sortOrder: number;
   recordCount: number;
   cumulative: boolean;
+  summaryMode: string;
   conductorMode: string;
   conductorPointsPerUnit: number | null;
   conductorUnitSize: number | null;
@@ -38,6 +39,7 @@ type FormState = {
   valueField: string;
   active: boolean;
   cumulative: boolean;
+  summaryMode: "sum" | "average" | "max" | "min" | "selected_week";
   conductorMode: "off" | "rate" | "flat";
   conductorPointsPerUnit: string;
   conductorUnitSize: string;
@@ -67,6 +69,7 @@ function emptyForm(shape: string, name = ""): FormState {
     valueField: numeric?.key ?? "",
     active: true,
     cumulative: false,
+    summaryMode: "selected_week",
     conductorMode: "off",
     conductorPointsPerUnit: "",
     conductorUnitSize: "",
@@ -88,6 +91,9 @@ function formFromCategory(cat: Category): FormState {
     valueField: cat.valueField,
     active: cat.active,
     cumulative: cat.cumulative,
+    summaryMode: (["sum", "average", "max", "min", "selected_week"].includes(cat.summaryMode)
+      ? cat.summaryMode
+      : "selected_week") as FormState["summaryMode"],
     conductorMode: cat.conductorMode === "rate" || cat.conductorMode === "flat" ? cat.conductorMode : "off",
     conductorPointsPerUnit: cat.conductorPointsPerUnit !== null ? String(cat.conductorPointsPerUnit) : "",
     conductorUnitSize: cat.conductorUnitSize !== null ? String(cat.conductorUnitSize) : "",
@@ -166,6 +172,7 @@ export function CategoryForm({
       valueField: isFreeText ? "" : form.valueField,
       active: form.active,
       cumulative: isFreeText ? false : form.cumulative,
+      summaryMode: isFreeText ? "selected_week" : form.summaryMode,
       conductorMode,
       conductorPointsPerUnit: conductorMode === "rate" ? Number(form.conductorPointsPerUnit) || 0 : null,
       conductorUnitSize: conductorMode === "rate" ? Number(form.conductorUnitSize) || 1 : null,
@@ -389,6 +396,28 @@ export function CategoryForm({
           Cumulative (a lifetime running total, like Kills - Conductor points and Passenger ranking use the
           week-over-week gain instead of the raw value)
         </label>
+      )}
+
+      {form.shape !== "free_text" && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium">Summarised as</label>
+          <select
+            value={form.summaryMode}
+            onChange={(e) => setForm((f) => ({ ...f, summaryMode: e.target.value as FormState["summaryMode"] }))}
+            className="border border-neutral-300 rounded px-3 py-2"
+          >
+            <option value="selected_week">Selected week</option>
+            <option value="sum">Sum</option>
+            <option value="average">Average</option>
+            <option value="max">Max</option>
+            <option value="min">Min</option>
+          </select>
+          <p className="text-neutral-400 text-xs">
+            How this category collapses into one number when a report covers a range of weeks
+            (e.g. the Alliance Detail Report's Summary view). "Selected week" shows the value
+            from the last week of the requested range, not a range total.
+          </p>
+        </div>
       )}
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">

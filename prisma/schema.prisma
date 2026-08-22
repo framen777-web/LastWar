@@ -72,6 +72,13 @@ model Category {
   // raw value, for any category flagged this way.
   cumulative Boolean @default(false)
 
+  // How this category's per-week values collapse into one number when a report
+  // summarises across a range of weeks (Alliance Detail Report's Summary mode and its
+  // Excel export) - "sum" | "average" | "max" | "min" | "selected_week". "selected_week"
+  // means the value from the last week of the requested range, not a range computation.
+  // Meaningless for free_text categories (they never roll up to a single value).
+  summaryMode String @default("selected_week")
+
   // Conductor points config: "off" | "rate" | "flat". "rate" scores
   // (weekly value / conductorUnitSize) * conductorPointsPerUnit; "flat" scores
   // conductorFlatValue if the member has any value for that week, regardless of size.

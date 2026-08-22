@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       active: body.active ?? true,
       sortOrder: maxSortOrder + 1,
       cumulative: isFreeText ? false : (body.cumulative ?? false),
+      summaryMode: isFreeText ? "selected_week" : (body.summaryMode ?? "selected_week"),
       conductorMode,
       conductorPointsPerUnit: conductorMode === "rate" ? (body.conductorPointsPerUnit ?? null) : null,
       conductorUnitSize: conductorMode === "rate" ? (body.conductorUnitSize ?? null) : null,
