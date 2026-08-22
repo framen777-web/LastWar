@@ -1,5 +1,11 @@
 export type SummaryMode = "sum" | "average" | "max" | "min" | "selected_week";
 
+// free_text categories don't normally roll up to a single value, so summaryMode is
+// hidden/forced for them everywhere - except the ones in this set, which do participate
+// in report summarisation despite being free_text (Squads' Air/Tank/Missile/Fourth
+// composition, consolidated in Alliance Detail Report's Summary mode).
+export const FREE_TEXT_SUMMARIZABLE_KEYS = new Set(["squads"]);
+
 export const SUMMARY_MODE_LABELS: Record<SummaryMode, string> = {
   sum: "Sum",
   average: "Average",

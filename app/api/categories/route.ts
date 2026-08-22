@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateCategoryInput, slugify, type CategoryInput } from "@/lib/categories/validate";
 import { requireAdminApi } from "@/lib/auth/dal";
+import { FREE_TEXT_SUMMARIZABLE_KEYS } from "@/lib/reports/summaryMode";
 
 export async function GET() {
   const gate = await requireAdminApi();
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       active: body.active ?? true,
       sortOrder: maxSortOrder + 1,
       cumulative: isFreeText ? false : (body.cumulative ?? false),
-      summaryMode: isFreeText ? "selected_week" : (body.summaryMode ?? "selected_week"),
+      summaryMode: isFreeText && !FREE_TEXT_SUMMARIZABLE_KEYS.has(key) ? "selected_week" : (body.summaryMode ?? "selected_week"),
       conductorMode,
       conductorPointsPerUnit: conductorMode === "rate" ? (body.conductorPointsPerUnit ?? null) : null,
       conductorUnitSize: conductorMode === "rate" ? (body.conductorUnitSize ?? null) : null,

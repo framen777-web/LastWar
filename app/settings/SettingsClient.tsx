@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SUMMARY_MODE_LABELS, type SummaryMode } from "@/lib/reports/summaryMode";
 
 export function SettingsClient() {
   const [minPasswordLength, setMinPasswordLength] = useState("8");
   const [r1BottomWeeksWindow, setR1BottomWeeksWindow] = useState("5");
+  const [mvpSummaryMode, setMvpSummaryMode] = useState<SummaryMode>("sum");
   const [week1StartDate, setWeek1StartDate] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [geminiApiKeySet, setGeminiApiKeySet] = useState(false);
@@ -20,6 +22,7 @@ export function SettingsClient() {
       .then((data) => {
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
         setR1BottomWeeksWindow(data.settings?.r1BottomWeeksWindow ?? "5");
+        setMvpSummaryMode((data.settings?.mvpSummaryMode as SummaryMode) ?? "sum");
         setWeek1StartDate(data.settings?.week1StartDate ?? "");
         setGeminiApiKeySet(!!data.geminiApiKeySet);
         setGeneralPassword(data.settings?.generalPassword ?? "");
@@ -43,6 +46,7 @@ export function SettingsClient() {
     const body: Record<string, string> = {
       minPasswordLength: String(minLength),
       r1BottomWeeksWindow: String(Math.max(1, Number(r1BottomWeeksWindow) || 5)),
+      mvpSummaryMode,
       week1StartDate,
       generalPassword,
     };
@@ -106,6 +110,32 @@ export function SettingsClient() {
             Default averaging window for the R1 report&apos;s bottom panel. Only affects weeks that haven&apos;t
             been viewed yet - once a week&apos;s report has been generated, its own window is pinned and this
             default no longer affects it.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="mvpSummaryMode" className="text-sm font-medium">
+            MVP score summary mode
+          </label>
+          <select
+            id="mvpSummaryMode"
+            value={mvpSummaryMode}
+            onChange={(e) => {
+              setMvpSummaryMode(e.target.value as SummaryMode);
+              setSaved(false);
+            }}
+            disabled={loading}
+            className="border border-neutral-300 rounded px-3 py-2 w-48"
+          >
+            {(Object.entries(SUMMARY_MODE_LABELS) as [SummaryMode, string][]).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <p className="text-neutral-500 text-xs">
+            How each member&apos;s MVP score collapses into one number in the Alliance Detail Report&apos;s
+            Summary view. MVP isn&apos;t a Category (it&apos;s a computed score, not an uploaded stat), so it
+            gets its own setting here rather than in Setup → Categories. Defaults to Sum, matching
+            how it&apos;s worked until now.
           </p>
         </div>
 

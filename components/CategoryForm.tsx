@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SHAPE_FIELDS } from "@/lib/ai/prompts";
+import { FREE_TEXT_SUMMARIZABLE_KEYS } from "@/lib/reports/summaryMode";
 
 export type Category = {
   id: number;
@@ -172,7 +173,7 @@ export function CategoryForm({
       valueField: isFreeText ? "" : form.valueField,
       active: form.active,
       cumulative: isFreeText ? false : form.cumulative,
-      summaryMode: isFreeText ? "selected_week" : form.summaryMode,
+      summaryMode: isFreeText && !FREE_TEXT_SUMMARIZABLE_KEYS.has(editing?.key ?? "") ? "selected_week" : form.summaryMode,
       conductorMode,
       conductorPointsPerUnit: conductorMode === "rate" ? Number(form.conductorPointsPerUnit) || 0 : null,
       conductorUnitSize: conductorMode === "rate" ? Number(form.conductorUnitSize) || 1 : null,
@@ -398,7 +399,7 @@ export function CategoryForm({
         </label>
       )}
 
-      {form.shape !== "free_text" && (
+      {(form.shape !== "free_text" || FREE_TEXT_SUMMARIZABLE_KEYS.has(editing?.key ?? "")) && (
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Summarised as</label>
           <select
@@ -416,6 +417,7 @@ export function CategoryForm({
             How this category collapses into one number when a report covers a range of weeks
             (e.g. the Alliance Detail Report's Summary view). "Selected week" shows the value
             from the last week of the requested range, not a range total.
+            {form.shape === "free_text" && " For Squads, this also controls how each of Air/Tank/Missile/Fourth is consolidated."}
           </p>
         </div>
       )}

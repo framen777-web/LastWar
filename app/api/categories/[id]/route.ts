@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { validateCategoryInput, type CategoryInput } from "@/lib/categories/validate";
 import { recomputeCategoryFromRawValue } from "@/lib/pipeline/run";
 import { requireAdminApi } from "@/lib/auth/dal";
+import { FREE_TEXT_SUMMARIZABLE_KEYS } from "@/lib/reports/summaryMode";
 
 const RECOMPUTE_TRIGGER_FIELDS = ["divisor", "valueField", "importMode", "dedupField"] as const;
 
@@ -71,7 +72,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
       active: merged.active,
       sortOrder: patch.sortOrder ?? existing.sortOrder,
       cumulative: isFreeText ? false : (merged.cumulative ?? false),
-      summaryMode: isFreeText ? "selected_week" : (merged.summaryMode ?? "selected_week"),
+      summaryMode: isFreeText && !FREE_TEXT_SUMMARIZABLE_KEYS.has(existing.key) ? "selected_week" : (merged.summaryMode ?? "selected_week"),
       conductorMode,
       conductorPointsPerUnit: conductorMode === "rate" ? (merged.conductorPointsPerUnit ?? null) : null,
       conductorUnitSize: conductorMode === "rate" ? (merged.conductorUnitSize ?? null) : null,

@@ -85,6 +85,9 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
   const mvpByKey = new Map<string, number>(); // memberId:weekNumber -> mvp
   for (const r of scoredAll) mvpByKey.set(`${r.memberId}:${r.weekNumber}`, r.mvp);
 
+  const mvpSummaryModeSetting = await prisma.setting.findUnique({ where: { key: "mvpSummaryMode" } });
+  const mvpSummaryMode = (mvpSummaryModeSetting?.value as SummaryMode) ?? "sum";
+
   // memberId:weekNumber:categoryKey -> value
   const valueByKey = new Map<string, number>();
   for (const s of stats) valueByKey.set(`${s.memberId}:${s.weekNumber}:${s.categoryKey}`, s.value);
@@ -180,13 +183,8 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
       }
     }
 
-    let mvpAcc: number | undefined;
-    for (let week = fromWeek; week <= toWeek; week++) {
-      const mvp = mvpByKey.get(`${memberId}:${week}`);
-      if (mvp === undefined) continue;
-      mvpAcc = (mvpAcc ?? 0) + mvp;
-      hasAny = true;
-    }
+    const mvpAcc = reduceOverRange(mvpSummaryMode, (week) => mvpByKey.get(`${memberId}:${week}`), fromWeek, toWeek);
+    if (mvpAcc !== undefined) hasAny = true;
 
     if (!hasAny) continue;
     summaryRows.push({
