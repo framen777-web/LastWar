@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/auth/actions";
 import { useNavigationBlocker } from "@/components/NavigationBlocker";
+import { APP_VERSION } from "@/lib/version";
 
 function BackIcon() {
   return (
@@ -56,8 +57,9 @@ export function NavHeader({ user }: { user: NavUser }) {
             </button>
           )}
         </div>
-        <Link href="/" onNavigate={guardedNavigate} className="app-title font-semibold text-sm">
-          Alliance Stats
+        <Link href="/" onNavigate={guardedNavigate} className="flex flex-col items-center leading-tight">
+          <span className="app-title font-semibold text-sm">Alliance Stats</span>
+          <span className="text-[10px] text-neutral-400">v{APP_VERSION}</span>
         </Link>
         <div className="w-10 flex justify-end">
           {!isHome && (
