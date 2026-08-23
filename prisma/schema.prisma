@@ -48,6 +48,8 @@ model Member {
   categoryRecords     CategoryRecord[]
   suggestions         Suggestion[]
   conductorSelections ConductorSelection[]
+  seasonExtraValues   SeasonExtraValue[]
+  seasonResults       SeasonResult[]
 }
 
 model Category {
@@ -233,4 +235,115 @@ model ConductorSelection {
   createdAt         DateTime       @default(now())
 
   @@unique([roundId, slotIndex, role])
+}
+
+// One reward season - a fixed week range at the end of which contribution is scored and reward
+// boxes are distributed. "draft" can still have its scoring config and bands edited, and its
+// report is computed live; "final" is locked and its report reads the frozen SeasonResult rows
+// instead (mirrors ConductorRound's draft/confirmed convention).
+model Season {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  weekStart   Int
+  weekEnd     Int
+  totalBoxes  Int
+  status      String    @default("draft") // "draft" | "final"
+  finalizedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categoryPoints SeasonCategoryPoints[]
+  extraItems     SeasonExtraItem[]
+  bands          SeasonBand[]
+  results        SeasonResult[]
+}
+
+// Points config for one existing Category's contribution to one season's score. Mirrors
+// Category.conductorMode/conductorPointsPerUnit/conductorUnitSize/conductorFlatValue, but scoped
+// per season instead of global - a category can be worth different points in different seasons,
+// and a category not listed here simply doesn't count toward this season's score at all (no "off"
+// mode needed - presence in this table IS the "on" switch).
+model SeasonCategoryPoints {
+  id            Int    @id @default(autoincrement())
+  seasonId      Int
+  season        Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  categoryKey   String
+  mode          String // "rate" | "flat"
+  pointsPerUnit Float?
+  unitSize      Float?
+  flatValue     Float?
+
+  @@unique([seasonId, categoryKey])
+}
+
+// A season-specific scoring item that doesn't exist as a permanent Category (e.g. Season 6's
+// CrystalGold, Capture). `key` is slugified from `name` at creation time (lowercase,
+// non-alphanumeric -> "_"), same convention as Category.key. Values are a one-time per-commander
+// total (SeasonExtraValue), not a weekly series.
+model SeasonExtraItem {
+  id            Int      @id @default(autoincrement())
+  seasonId      Int
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  key           String
+  name          String
+  mode          String // "rate" | "flat"
+  pointsPerUnit Float?
+  unitSize      Float?
+  flatValue     Float?
+  createdAt     DateTime @default(now())
+
+  values SeasonExtraValue[]
+
+  @@unique([seasonId, key])
+}
+
+// The one-time uploaded total for one commander on one season-specific item. rawValue is the
+// untouched uploaded number (same "preserve the raw reading forever" convention as
+// CategoryRecord.rawValue) - re-uploading overwrites it in place, there's no weekly dimension to
+// dedupe against.
+model SeasonExtraValue {
+  id        Int             @id @default(autoincrement())
+  itemId    Int
+  item      SeasonExtraItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  memberId  Int
+  member    Member          @relation(fields: [memberId], references: [id])
+  rawValue  Float
+  updatedAt DateTime        @updatedAt
+
+  @@unique([itemId, memberId])
+}
+
+// One reward band for a season, in rank order. Band `order` 1 covers the top `commanderCount`
+// ranked commanders, `order` 2 covers the next `commanderCount`, and so on - NOT an explicit
+// rank-from/rank-to range, so reordering or resizing an earlier band automatically shifts every
+// band after it. `pctOfBoxes` is a percentage (0-100) of the season's totalBoxes.
+model SeasonBand {
+  id             Int    @id @default(autoincrement())
+  seasonId       Int
+  season         Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  order          Int
+  commanderCount Int
+  pctOfBoxes     Float
+
+  @@unique([seasonId, order])
+}
+
+// Frozen per-commander result, written once when a season is finalized (mirrors
+// ConductorSelection.pointsAtSelection - a snapshot, not something later data edits should move).
+// `breakdown` is a JSON string: { categories: {key: points}, extras: {key: points} } for the
+// report's per-item columns and for audit if a commander disputes their score.
+model SeasonResult {
+  id           Int      @id @default(autoincrement())
+  seasonId     Int
+  season       Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  memberId     Int
+  member       Member   @relation(fields: [memberId], references: [id])
+  rank         Int
+  seasonPoints Float
+  bandOrder    Int? // null = ranked below every configured band, 0 boxes
+  boxesAwarded Int
+  breakdown    String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@unique([seasonId, memberId])
 }

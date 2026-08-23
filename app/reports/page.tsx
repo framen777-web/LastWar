@@ -80,6 +80,16 @@ export default async function ReportsIndexPage() {
             index={6}
           />
         )}
+        {visible("reports-season") && (
+          <MenuButton
+            href="/reports/season"
+            label="Season Report"
+            description="Season Points ranking and reward box distribution"
+            icon="🎁"
+            accentKey="reports-season"
+            index={7}
+          />
+        )}
       </div>
     </div>
   );

@@ -50,6 +50,16 @@ export default async function SetupPage() {
             index={3}
           />
         )}
+        {visible("settings-seasons") && (
+          <MenuButton
+            href="/setup/seasons"
+            label="Seasons"
+            description="Season scoring, reward bands, and extras upload"
+            icon="🏅"
+            accentKey="setup-seasons"
+            index={4}
+          />
+        )}
         {visible("settings-conductor") && (
           <MenuButton
             href="/setup/conductor"
@@ -57,7 +67,7 @@ export default async function SetupPage() {
             description="Cycle length, from-week, and Passenger rules"
             icon="🎚️"
             accentKey="setup-conductor"
-            index={4}
+            index={5}
           />
         )}
         {visible("settings-import-history") && (
@@ -67,7 +77,7 @@ export default async function SetupPage() {
             description="Bulk-import weekly stats from a CSV export"
             icon="📥"
             accentKey="setup-import-history"
-            index={5}
+            index={6}
           />
         )}
         {visible("settings-import-conductor-history") && (
@@ -77,7 +87,7 @@ export default async function SetupPage() {
             description="Backfill past Conductor/Passenger selections from a CSV"
             icon="🛤️"
             accentKey="setup-import-conductor-history"
-            index={6}
+            index={7}
           />
         )}
       </div>

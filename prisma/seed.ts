@@ -242,6 +242,13 @@ const MENU_ITEMS = [
   },
   { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
   { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  {
+    key: "reports-season",
+    label: "Season Report",
+    href: "/reports/season",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
 
   { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },
@@ -265,6 +272,7 @@ const MENU_ITEMS = [
     roles: ["ADMIN"],
     parentKey: "home-settings",
   },
+  { key: "settings-seasons", label: "Seasons", href: "/setup/seasons", roles: ["ADMIN"], parentKey: "home-settings" },
 ];
 
 async function main() {
