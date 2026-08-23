@@ -3,7 +3,7 @@ import { ZoomWrapper } from "@/components/ZoomWrapper";
 import { BarChart } from "@/components/BarChart";
 import { formatStatNumber } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
-import { getGraphMetrics, getGraphSeries } from "@/lib/dashboards/categoryGraph";
+import { getGraphMetrics, getGraphSeries, computeGraphStats } from "@/lib/dashboards/categoryGraph";
 
 const WEEK_COUNT_OPTIONS = [4, 8, 12, 26, 52];
 
@@ -33,6 +33,9 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
   const aggregationParam = Array.isArray(params.aggregation) ? params.aggregation[0] : params.aggregation;
   const aggregation = aggregationParam === "average" ? "average" : "sum";
 
+  const rangeParam = Array.isArray(params.range) ? params.range[0] : params.range;
+  const range = rangeParam === "selected" ? "selected" : "lifetime";
+
   const members = await prisma.member.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   const knownWeeks = await prisma.weeklyStat.findMany({
@@ -46,6 +49,15 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
 
   const series = await getGraphSeries(selectedMetric.key, selectedMetric.cumulative, selectedWeeks, selectedCommander, aggregation);
   const bars = series.map((s) => ({ label: `W${s.week}`, value: s.value }));
+
+  // Lifetime reuses the full, unsliced week list already fetched above (every week the
+  // alliance has any data for) instead of a separate query - Selected just reuses the
+  // series already computed for the bars themselves.
+  const statsSeries =
+    range === "lifetime"
+      ? await getGraphSeries(selectedMetric.key, selectedMetric.cumulative, weekNumbers, selectedCommander, aggregation)
+      : series;
+  const stats = computeGraphStats(statsSeries);
 
   const commanderName = selectedCommander === "all" ? null : (members.find((m) => m.id === selectedCommander)?.name ?? null);
   const chartTitle =
@@ -108,11 +120,26 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
           <option value="sum">Sum</option>
           <option value="average">Average</option>
         </select>
+
+        <label htmlFor="range" className="font-medium">
+          Avg/Max/Min from
+        </label>
+        <select id="range" name="range" defaultValue={range} className="border border-neutral-300 rounded px-2 py-1">
+          <option value="lifetime">Lifetime</option>
+          <option value="selected">Selected range</option>
+        </select>
       </form>
 
       <ZoomWrapper contentId="alliance-graph-content">
         <div className="border border-neutral-200 rounded overflow-hidden">
           <div className="bg-sky-300 px-3 py-1 font-semibold text-neutral-900">{chartTitle}</div>
+          {stats && (
+            <div className="flex items-center gap-4 text-sm px-4 pt-3 flex-wrap">
+              <span><span className="text-neutral-500">Average:</span> <span className="font-medium">{formatStatNumber(stats.average)}</span></span>
+              <span><span className="text-neutral-500">Max:</span> <span className="font-medium">{formatStatNumber(stats.max)}</span></span>
+              <span><span className="text-neutral-500">Min:</span> <span className="font-medium">{formatStatNumber(stats.min)}</span></span>
+            </div>
+          )}
           <div className="p-4">
             {bars.every((b) => b.value === 0) ? (
               <p className="text-neutral-500 text-sm">No data for this selection.</p>

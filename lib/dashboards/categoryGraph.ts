@@ -50,7 +50,7 @@ function squadMetricValue(key: string, fields: SquadFields): number {
     .reduce((s, v) => s + v, 0);
 }
 
-export type GraphBar = { week: number; value: number };
+export type GraphBar = { week: number; value: number; hasData: boolean };
 
 /**
  * One bar per requested week for a metric, either for a single member or aggregated
@@ -69,14 +69,14 @@ export async function getGraphSeries(
   if (weeks.length === 0) return [];
 
   function aggregate(week: number, values: number[]): GraphBar {
-    if (values.length === 0) return { week, value: 0 };
+    if (values.length === 0) return { week, value: 0, hasData: false };
     const total = values.reduce((s, v) => s + v, 0);
-    return { week, value: memberId === "all" && aggregation === "average" ? total / values.length : total };
+    return { week, value: memberId === "all" && aggregation === "average" ? total / values.length : total, hasData: true };
   }
 
   if (isSquadMetric(metricKey)) {
     const squadsCategory = await prisma.category.findUnique({ where: { key: "squads" } });
-    if (!squadsCategory) return weeks.map((week) => ({ week, value: 0 }));
+    if (!squadsCategory) return weeks.map((week) => ({ week, value: 0, hasData: false }));
 
     const records = await prisma.categoryRecord.findMany({
       where: { categoryId: squadsCategory.id, weekNumber: { in: weeks }, ...(memberId === "all" ? {} : { memberId }) },
@@ -125,4 +125,14 @@ export async function getGraphSeries(
     lastByMember.set(s.memberId, s.value);
   }
   return weeks.map((week) => aggregate(week, gainsByWeek.get(week) ?? []));
+}
+
+export function computeGraphStats(bars: GraphBar[]): { average: number; max: number; min: number } | null {
+  const values = bars.filter((b) => b.hasData).map((b) => b.value);
+  if (values.length === 0) return null;
+  return {
+    average: values.reduce((sum, v) => sum + v, 0) / values.length,
+    max: Math.max(...values),
+    min: Math.min(...values),
+  };
 }
