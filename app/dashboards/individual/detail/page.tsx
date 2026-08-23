@@ -1,3 +1,5 @@
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
@@ -67,56 +69,64 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Detail List</h1>
+    <ZoomProvider>
+      <div className="flex flex-col gap-6">
+        <h1 className="text-xl font-semibold">Detail List</h1>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        {canPickAnyMember ? (
-          <form className="flex items-center gap-2 text-sm flex-wrap">
-            <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-              Go
-            </button>
-            <label htmlFor="member" className="font-medium">
-              Member
-            </label>
-            <select id="member" name="member" defaultValue={selectedMemberId} className="border border-neutral-300 rounded px-2 py-1">
-              {allMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </form>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {canPickAnyMember ? (
+            <form className="flex items-center gap-2 text-sm flex-wrap">
+              <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+                Go
+              </button>
+              <label htmlFor="member" className="font-medium">
+                Member
+              </label>
+              <select id="member" name="member" defaultValue={selectedMemberId} className="border border-neutral-300 rounded px-2 py-1">
+                {allMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </form>
+          ) : (
+            <p className="text-sm text-neutral-500">
+              {member?.name} {member?.allianceRank ? `· ${member.allianceRank}` : ""}
+            </p>
+          )}
+
+          {member && growthRows.length > 0 && (
+            <div className="flex items-center gap-2">
+              <ZoomControl />
+              <ShareReportButton targetId="individual-detail-content" filename="individual-detail.png" title={member.name} />
+              <a
+                href={`/api/dashboards/individual/export?member=${member.id}`}
+                className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Export to Excel
+              </a>
+            </div>
+          )}
+        </div>
+
+        {!member ? (
+          <p className="text-neutral-500 text-sm">Member not found.</p>
+        ) : growthRows.length === 0 ? (
+          <p className="text-neutral-500 text-sm">No stats recorded for {member.name} yet.</p>
         ) : (
-          <p className="text-sm text-neutral-500">
-            {member?.name} {member?.allianceRank ? `· ${member.allianceRank}` : ""}
-          </p>
-        )}
-
-        {member && growthRows.length > 0 && (
-          <a
-            href={`/api/dashboards/individual/export?member=${member.id}`}
-            className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Export to Excel
-          </a>
+          <>
+            <div className="hidden md:block">
+              <ZoomWrapper contentId="individual-detail-content">
+                <DataTable columns={columns} rows={rows} defaultSort={{ key: "week", direction: "desc" }} />
+              </ZoomWrapper>
+            </div>
+            <div className="md:hidden">
+              <MobileCardList columns={columns} rows={rows} titleKey="week" />
+            </div>
+          </>
         )}
       </div>
-
-      {!member ? (
-        <p className="text-neutral-500 text-sm">Member not found.</p>
-      ) : growthRows.length === 0 ? (
-        <p className="text-neutral-500 text-sm">No stats recorded for {member.name} yet.</p>
-      ) : (
-        <>
-          <div className="hidden md:block">
-            <DataTable columns={columns} rows={rows} defaultSort={{ key: "week", direction: "desc" }} />
-          </div>
-          <div className="md:hidden">
-            <MobileCardList columns={columns} rows={rows} titleKey="week" />
-          </div>
-        </>
-      )}
-    </div>
+    </ZoomProvider>
   );
 }

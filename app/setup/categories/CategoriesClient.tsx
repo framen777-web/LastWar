@@ -10,6 +10,7 @@ export function CategoriesClient() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [duplicateName, setDuplicateName] = useState<string | undefined>(undefined);
+  const [recomputeResult, setRecomputeResult] = useState<{ name: string; recalculated: number } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -79,6 +80,16 @@ export function CategoriesClient() {
     await load();
   }
 
+  async function handleRecompute(cat: Category) {
+    const proceed = confirm(
+      `Recompute all ${cat.recordCount} record(s) for "${cat.name}" from their original raw values, using the current divisor? This can't lose data - it only re-derives the stored value.`
+    );
+    if (!proceed) return;
+    const res = await fetch(`/api/categories/${cat.id}/recompute`, { method: "POST" });
+    const data = await res.json();
+    setRecomputeResult({ name: cat.name, recalculated: data.recalculated });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -87,6 +98,12 @@ export function CategoriesClient() {
           Add category
         </button>
       </div>
+
+      {recomputeResult && (
+        <p className="text-green-700 text-sm">
+          Recomputed {recomputeResult.recalculated} record(s) for &quot;{recomputeResult.name}&quot;.
+        </p>
+      )}
 
       {loading ? (
         <p className="text-neutral-500 text-sm">Loading…</p>
@@ -194,6 +211,9 @@ export function CategoriesClient() {
                   <td className="py-2 pr-3 whitespace-nowrap">
                     <button onClick={() => openEdit(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
                       Edit
+                    </button>
+                    <button onClick={() => handleRecompute(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
+                      Recompute
                     </button>
                     <button onClick={() => openDuplicate(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
                       Duplicate

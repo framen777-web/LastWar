@@ -29,16 +29,6 @@ export default async function Home() {
           index={1}
         />
       )}
-      {visible("home-end-of-week-reports") && (
-        <MenuButton
-          href="/reports"
-          label="End of week reports"
-          description="Records, leaderboards and growth for a given week"
-          icon="📊"
-          accentKey="eow-reports"
-          index={2}
-        />
-      )}
       {visible("home-conductor") && (
         <MenuButton
           href="/conductor"
@@ -46,7 +36,7 @@ export default async function Home() {
           description="Standings, rotation selection, and history"
           icon="🚂"
           accentKey="conductor"
-          index={3}
+          index={2}
         />
       )}
       {visible("home-dashboards") && (
@@ -56,11 +46,11 @@ export default async function Home() {
           description={user.role === "MEMBER" ? "Your growth over time" : "Alliance reports and per-member growth"}
           icon="📈"
           accentKey="reports"
-          index={4}
+          index={3}
         />
       )}
       {visible("home-settings") && (
-        <MenuButton href="/setup" label="Settings" description="Categories and configuration" icon="⚙️" accentKey="settings" index={5} />
+        <MenuButton href="/setup" label="Settings" description="Categories and configuration" icon="⚙️" accentKey="settings" index={4} />
       )}
     </div>
   );

@@ -32,7 +32,7 @@ export default async function SetupPage() {
         )}
         {visible("settings-categories") && (
           <MenuButton
-            href="/categories"
+            href="/setup/categories"
             label="Categories"
             description="What gets imported and how it's stored"
             icon="🗂️"

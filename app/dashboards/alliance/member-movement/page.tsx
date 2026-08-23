@@ -1,3 +1,5 @@
+import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
+import { ShareReportButton } from "@/components/ShareReportButton";
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { getMemberMovementReport } from "@/lib/dashboards/memberMovement";
@@ -52,33 +54,41 @@ export default async function MemberMovementPage({ searchParams }: PageProps<"/d
         show who joined and who left in between.
       </p>
 
-      <form className="flex items-center gap-2 text-sm">
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
+      <ZoomProvider>
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <form className="flex items-center gap-2 text-sm contents">
+            <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+              Go
+            </button>
+            <label htmlFor="week" className="font-medium">
+              Week
+            </label>
+            <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="member-movement-known-weeks" />
+            <datalist id="member-movement-known-weeks">
+              {weekNumbers.map((w) => (
+                <option key={w} value={w} />
+              ))}
+            </datalist>
+          </form>
+          <ZoomControl />
+          <ShareReportButton targetId="member-movement-content" filename="member-movement.png" title="Member Movement" />
+        </div>
 
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="member-movement-known-weeks" />
-        <datalist id="member-movement-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
-      </form>
-
-      <div className="flex gap-4 flex-wrap">
-        <StatCard label={`Opening (week ${report.priorWeek})`} value={report.openingCount} />
-        <StatCard label="Left" value={report.left.length} />
-        <StatCard label="Joined" value={report.joined.length} />
-        <StatCard label={`Closing (week ${report.week})`} value={report.closingCount} />
-      </div>
-
-      <div className="flex gap-4 flex-wrap">
-        <NameList title="Left" rows={report.left} emptyText="No one left between these weeks." />
-        <NameList title="Joined" rows={report.joined} emptyText="No one new joined between these weeks." />
-      </div>
+        <ZoomWrapper contentId="member-movement-content">
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-4 flex-wrap">
+              <StatCard label={`Opening (week ${report.priorWeek})`} value={report.openingCount} />
+              <StatCard label="Left" value={report.left.length} />
+              <StatCard label="Joined" value={report.joined.length} />
+              <StatCard label={`Closing (week ${report.week})`} value={report.closingCount} />
+            </div>
+            <div className="flex gap-4 flex-wrap">
+              <NameList title="Left" rows={report.left} emptyText="No one left between these weeks." />
+              <NameList title="Joined" rows={report.joined} emptyText="No one new joined between these weeks." />
+            </div>
+          </div>
+        </ZoomWrapper>
+      </ZoomProvider>
     </div>
   );
 }

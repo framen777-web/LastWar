@@ -44,7 +44,7 @@ export default async function ReportsIndexPage() {
           <MenuButton
             href="/reports/clubs"
             label="VS Clubs"
-            description="Achievement tiers by best-ever VS reading"
+            description="Achievement tiers by how many times each member has reached them"
             icon="🛡️"
             accentKey="reports-clubs"
             index={3}

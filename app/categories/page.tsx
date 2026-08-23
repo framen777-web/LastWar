@@ -1,7 +1,5 @@
-import { requireMenuAccess } from "@/lib/menuAccess";
-import { CategoriesClient } from "./CategoriesClient";
+import { redirect } from "next/navigation";
 
-export default async function CategoriesPage() {
-  await requireMenuAccess("settings-categories");
-  return <CategoriesClient />;
+export default function CategoriesRedirect() {
+  redirect("/setup/categories");
 }

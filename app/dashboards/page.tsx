@@ -31,6 +31,16 @@ export default async function DashboardsHubPage() {
             index={1}
           />
         )}
+        {visible("home-end-of-week-reports") && (
+          <MenuButton
+            href="/reports"
+            label="End of Week Reports"
+            description="Records, leaderboards and growth for a given week"
+            icon="📊"
+            accentKey="eow-reports"
+            index={2}
+          />
+        )}
       </div>
     </div>
   );

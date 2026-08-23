@@ -128,7 +128,6 @@ const CATEGORIES = [
 const MENU_ITEMS = [
   { key: "home-my-stats", label: "Detail List", href: "/dashboard", roles: ["MEMBER"], parentKey: null },
   { key: "home-uploads", label: "Uploads", href: "/new-information", roles: ["ADMIN", "LEADER"], parentKey: null },
-  { key: "home-end-of-week-reports", label: "End of week reports", href: "/reports", roles: ["ADMIN", "LEADER"], parentKey: null },
   { key: "home-conductor", label: "Conductor", href: "/conductor", roles: ["ADMIN", "LEADER"], parentKey: null },
   {
     key: "conductor-select",
@@ -158,32 +157,6 @@ const MENU_ITEMS = [
     parentKey: "home-uploads",
   },
   { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"], parentKey: "home-uploads" },
-
-  { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
-  {
-    key: "reports-leaderboard",
-    label: "Leaderboards",
-    href: "/reports/leaderboard",
-    roles: ["ADMIN", "LEADER"],
-    parentKey: "home-end-of-week-reports",
-  },
-  {
-    key: "reports-new-records",
-    label: "New Records",
-    href: "/reports/new-records",
-    roles: ["ADMIN", "LEADER"],
-    parentKey: "home-end-of-week-reports",
-  },
-  { key: "reports-clubs", label: "VS Clubs", href: "/reports/clubs", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
-  {
-    key: "reports-squads",
-    label: "Squads",
-    href: "/reports/squad-power",
-    roles: ["ADMIN", "LEADER"],
-    parentKey: "home-end-of-week-reports",
-  },
-  { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
-  { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
 
   {
     key: "dashboards-individual",
@@ -236,12 +209,46 @@ const MENU_ITEMS = [
     parentKey: "dashboards-alliance",
   },
 
+  {
+    key: "home-end-of-week-reports",
+    label: "End of Week Reports",
+    href: "/reports",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-dashboards",
+  },
+
+  { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  {
+    key: "reports-leaderboard",
+    label: "Leaderboards",
+    href: "/reports/leaderboard",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  {
+    key: "reports-new-records",
+    label: "New Records",
+    href: "/reports/new-records",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  { key: "reports-clubs", label: "VS Clubs", href: "/reports/clubs", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  {
+    key: "reports-squads",
+    label: "Squads",
+    href: "/reports/squad-power",
+    roles: ["ADMIN", "LEADER"],
+    parentKey: "home-end-of-week-reports",
+  },
+  { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+  { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
+
   { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "users-list", label: "Users", href: "/setup/users/list", roles: ["ADMIN"], parentKey: "settings-users" },
   { key: "users-merge", label: "Merge", href: "/setup/users/merge", roles: ["ADMIN"], parentKey: "settings-users" },
   { key: "users-menu-access", label: "Menu Access", href: "/setup/users/menu-access", roles: ["ADMIN"], parentKey: "settings-users" },
-  { key: "settings-categories", label: "Categories", href: "/categories", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "settings-categories", label: "Categories", href: "/setup/categories", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-conductor", label: "Conductor Settings", href: "/setup/conductor", roles: ["ADMIN"], parentKey: "home-settings" },
   {
