@@ -26,12 +26,13 @@ export type MemberSeasonScore = {
   memberName: string;
   categoryPoints: Record<string, number>; // categoryKey -> points earned
   extraPoints: Record<string, number>; // extraItem key -> points earned
-  seasonPoints: number;
+  seasonScore: number;
 };
 
 /** Live computation of every active member's season score from current data and current season
- *  config. Used for the draft report and for finalizing. Never reads SeasonResult. */
-export async function computeSeasonScores(seasonId: number): Promise<MemberSeasonScore[]> {
+ *  config, under points mode. Used for the live report and for finalizing. Never reads
+ *  SeasonResult. */
+export async function computeSeasonPoints(seasonId: number): Promise<MemberSeasonScore[]> {
   const season = await prisma.season.findUniqueOrThrow({
     where: { id: seasonId },
     include: { categoryPoints: true, extraItems: { include: { values: true } } },
@@ -56,14 +57,15 @@ export async function computeSeasonScores(seasonId: number): Promise<MemberSeaso
 
       const extraPoints: Record<string, number> = {};
       for (const item of season.extraItems) {
+        if (item.mode == null) continue; // not configured for points mode
         const raw = item.values.find((v) => v.memberId === member.id)?.rawValue ?? 0;
-        extraPoints[item.key] = pointsForValue(item, raw);
+        extraPoints[item.key] = pointsForValue(item as PointsConfig, raw);
       }
 
-      const seasonPoints =
+      const seasonScore =
         Object.values(categoryPoints).reduce((a, b) => a + b, 0) + Object.values(extraPoints).reduce((a, b) => a + b, 0);
 
-      return { memberId: member.id, memberName: member.name, categoryPoints, extraPoints, seasonPoints };
+      return { memberId: member.id, memberName: member.name, categoryPoints, extraPoints, seasonScore };
     })
-    .sort((a, b) => b.seasonPoints - a.seasonPoints || a.memberName.localeCompare(b.memberName)); // ties broken by name, deterministic
+    .sort((a, b) => b.seasonScore - a.seasonScore || a.memberName.localeCompare(b.memberName)); // ties broken by name, deterministic
 }

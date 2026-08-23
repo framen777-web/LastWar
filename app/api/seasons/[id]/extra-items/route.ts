@@ -4,8 +4,9 @@ import { requireAdminApi } from "@/lib/auth/dal";
 import { slugify } from "@/lib/categories/validate";
 import { loadEditableSeason } from "@/lib/season/validate";
 
-// Created with mode "rate" and blank points fields, same as the spec's "Add item" control -
-// the admin fills in real point values afterward via PATCH on the created row.
+// Created with both points and positional config blank, same as the spec's "Add item" control -
+// the admin fills in whichever mode(s) they're using afterward via PATCH on the created row. An
+// item with neither configured simply doesn't count toward either mode's score yet.
 export async function POST(request: Request, ctx: RouteContext<"/api/seasons/[id]/extra-items">) {
   const gate = await requireAdminApi();
   if ("error" in gate) return gate.error;
@@ -34,7 +35,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/seasons/[id
   }
 
   const item = await prisma.seasonExtraItem.create({
-    data: { seasonId, key, name, mode: "rate", pointsPerUnit: null, unitSize: null, flatValue: null },
+    data: { seasonId, key, name, mode: null, pointsPerUnit: null, unitSize: null, flatValue: null, weight: null },
   });
 
   return NextResponse.json({ item: { ...item, valueCount: 0 } }, { status: 201 });

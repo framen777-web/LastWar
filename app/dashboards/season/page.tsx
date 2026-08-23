@@ -7,8 +7,10 @@ import { requireMenuAccess } from "@/lib/menuAccess";
 import { getSeasonReportData } from "@/lib/season/report";
 import { SeasonFinalizeControls } from "./SeasonFinalizeControls";
 
-export default async function SeasonReportPage({ searchParams }: PageProps<"/reports/season">) {
-  const user = await requireMenuAccess("home-season-reports");
+const MODE_LABELS: Record<string, string> = { points: "Points", positional: "Position" };
+
+export default async function SeasonReportPage({ searchParams }: PageProps<"/dashboards/season">) {
+  const user = await requireMenuAccess("dashboards-season");
   const params = await searchParams;
 
   const seasons = await prisma.season.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, name: true, weekStart: true, weekEnd: true } });
@@ -16,7 +18,7 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
   if (seasons.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Season Report</h1>
+        <h1 className="text-xl font-semibold">Season Reports</h1>
         <p className="text-neutral-500 text-sm">No seasons set up yet - create one in Setup → Seasons.</p>
       </div>
     );
@@ -29,7 +31,7 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
   if (!data) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Season Report</h1>
+        <h1 className="text-xl font-semibold">Season Reports</h1>
         <p className="text-neutral-500 text-sm">Season not found.</p>
       </div>
     );
@@ -40,36 +42,36 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
     { key: "member", header: "Commander", filter: "text" },
     ...data.categories.map((c): DataTableColumn => ({ key: `cat_${c.key}`, header: c.name, filter: "number" })),
     ...data.extraItems.map((i): DataTableColumn => ({ key: `extra_${i.key}`, header: i.name, filter: "number" })),
-    { key: "seasonPoints", header: "Season Points", filter: "number" },
+    { key: "seasonScore", header: "Season Score", filter: "number" },
     { key: "band", header: "Band", filter: "number" },
     { key: "boxes", header: "Boxes", filter: "number" },
   ];
 
-  const categoryRules = new Map(data.categories.map((c) => [c.key, pickNumberFormat(data.rows.map((r) => r.categoryPoints[c.key]))]));
-  const extraRules = new Map(data.extraItems.map((i) => [i.key, pickNumberFormat(data.rows.map((r) => r.extraPoints[i.key]))]));
+  const categoryRules = new Map(data.categories.map((c) => [c.key, pickNumberFormat(data.rows.map((r) => r.categoryValues[c.key]))]));
+  const extraRules = new Map(data.extraItems.map((i) => [i.key, pickNumberFormat(data.rows.map((r) => r.extraValues[i.key]))]));
 
   const rows: DataTableRow[] = data.rows.map((r) => {
     const cells: Record<string, React.ReactNode> = {
       rank: <span className="text-neutral-500">{r.rank}</span>,
       member: <span className="font-medium">{r.memberName}</span>,
-      seasonPoints: <span className="font-semibold">{formatWithRule(r.seasonPoints, "decimal")}</span>,
+      seasonScore: <span className="font-semibold">{formatWithRule(r.seasonScore, "decimal")}</span>,
       band: <span className="text-neutral-500">{r.bandOrder ?? "—"}</span>,
       boxes: <span>{r.boxesAwarded}</span>,
     };
     const sortValues: Record<string, number | string> = {
       rank: r.rank,
       member: r.memberName,
-      seasonPoints: r.seasonPoints,
+      seasonScore: r.seasonScore,
       band: r.bandOrder ?? 9999,
       boxes: r.boxesAwarded,
     };
     for (const c of data.categories) {
-      const v = r.categoryPoints[c.key];
+      const v = r.categoryValues[c.key];
       cells[`cat_${c.key}`] = formatWithRule(v, categoryRules.get(c.key)!);
       if (v !== undefined) sortValues[`cat_${c.key}`] = v;
     }
     for (const i of data.extraItems) {
-      const v = r.extraPoints[i.key];
+      const v = r.extraValues[i.key];
       cells[`extra_${i.key}`] = formatWithRule(v, extraRules.get(i.key)!);
       if (v !== undefined) sortValues[`extra_${i.key}`] = v;
     }
@@ -78,8 +80,11 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold">Season Report</h1>
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="text-xl font-semibold">Season Reports</h1>
+        <span className="px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 text-neutral-700">
+          Scored by: {MODE_LABELS[data.season.scoringMode] ?? data.season.scoringMode}
+        </span>
         {data.season.status === "final" && (
           <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
             Finalized {data.season.finalizedAt ? new Date(data.season.finalizedAt).toLocaleDateString() : ""}
@@ -105,9 +110,9 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
             </select>
           </form>
           <ZoomControl />
-          <ShareReportButton targetId="season-report-content" filename={`season-report-${data.season.name}.png`} title="Season Report" />
+          <ShareReportButton targetId="season-report-content" filename={`season-report-${data.season.name}.png`} title="Season Reports" />
           <a
-            href={`/api/reports/season/export?seasonId=${data.season.id}`}
+            href={`/api/dashboards/season/export?seasonId=${data.season.id}`}
             className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50"
           >
             Export to Excel
@@ -118,7 +123,7 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
           <p className="text-neutral-500 text-sm">No active commanders to score.</p>
         ) : (
           <ZoomWrapper contentId="season-report-content">
-            <DataTable columns={columns} rows={rows} defaultSort={{ key: "seasonPoints", direction: "desc" }} />
+            <DataTable columns={columns} rows={rows} defaultSort={{ key: "seasonScore", direction: "desc" }} />
           </ZoomWrapper>
         )}
 

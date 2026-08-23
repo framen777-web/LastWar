@@ -41,6 +41,16 @@ export default async function DashboardsHubPage() {
             index={2}
           />
         )}
+        {visible("dashboards-season") && (
+          <MenuButton
+            href="/dashboards/season"
+            label="Season Reports"
+            description="Season standings and reward box distribution"
+            icon="🎁"
+            accentKey="dashboards-season"
+            index={3}
+          />
+        )}
       </div>
     </div>
   );

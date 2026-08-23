@@ -36,3 +36,19 @@ export function validateRateFlat(input: RateFlatInput): string | null {
   }
   return null;
 }
+
+/** Same as validateRateFlat, but mode null/undefined is itself valid - meaning "not configured
+ *  for points mode" (SeasonExtraItem's points config is optional, since an item can be set up
+ *  for positional mode only, points mode only, both, or neither). */
+export function validateOptionalRateFlat(input: RateFlatInput): string | null {
+  if (input.mode === undefined || input.mode === null) return null;
+  return validateRateFlat(input);
+}
+
+/** Weight validation for both SeasonCategoryWeight and SeasonExtraItem.weight - just needs to be
+ *  a finite number; unlike rate/flat there's no shape to check, and nothing enforces weights
+ *  summing to any particular total beyond the Setup UI's own soft warning. */
+export function validateWeight(weight: unknown): string | null {
+  if (typeof weight !== "number" || !Number.isFinite(weight)) return "Weight must be a number.";
+  return null;
+}

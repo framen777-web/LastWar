@@ -1,5 +1,3 @@
-import type { MemberSeasonScore } from "./points";
-
 export type BandAssignment = {
   memberId: number;
   rank: number; // 1-based
@@ -14,9 +12,11 @@ export type BandDistributionResult = {
 
 /** Walks the ranked list in band order, splitting each band's box pool evenly across the
  *  commanders that actually fall in it, carrying any rounding remainder into the next band's
- *  pool. Commanders past the last band get bandOrder null / 0 boxes. */
+ *  pool. Commanders past the last band get bandOrder null / 0 boxes. Mode-agnostic - takes
+ *  whichever ranked list either scoring calculation produced (both expose {memberId}) and
+ *  doesn't care how the ranking was derived. */
 export function distributeBands(
-  ranked: MemberSeasonScore[],
+  ranked: { memberId: number }[], // already sorted best-first by either calculation
   bands: { order: number; commanderCount: number; pctOfBoxes: number }[],
   totalBoxes: number
 ): BandDistributionResult {

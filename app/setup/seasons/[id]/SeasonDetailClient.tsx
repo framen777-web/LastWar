@@ -9,20 +9,23 @@ type SeasonBasics = {
   weekStart: number;
   weekEnd: number;
   totalBoxes: number;
+  scoringMode: string;
   status: string;
   finalizedAt: string | null;
 };
 
 type CategoryOption = { key: string; name: string };
 type CategoryPointsServerRow = { categoryKey: string; mode: string; pointsPerUnit: number | null; unitSize: number | null; flatValue: number | null };
+type CategoryWeightServerRow = { categoryKey: string; weight: number };
 type ExtraItem = {
   id: number;
   key: string;
   name: string;
-  mode: string;
+  mode: string | null;
   pointsPerUnit: number | null;
   unitSize: number | null;
   flatValue: number | null;
+  weight: number | null;
   valueCount: number;
 };
 type BandServerRow = { order: number; commanderCount: number; pctOfBoxes: number };
@@ -86,7 +89,27 @@ function RateFlatFields({
   );
 }
 
-type CategoryRowState = { categoryKey: string; name: string; included: boolean } & RateFlatState;
+function WeightField({ value, onChange, locked }: { value: string; onChange: (v: string) => void; locked: boolean }) {
+  return (
+    <input
+      type="number"
+      step="any"
+      placeholder="weight"
+      disabled={locked}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="border border-neutral-300 rounded px-2 py-1 w-20"
+    />
+  );
+}
+
+type CategoryRowState = {
+  categoryKey: string;
+  name: string;
+  pointsIncluded: boolean;
+  weightIncluded: boolean;
+  weight: string;
+} & RateFlatState;
 
 function toRateFlatState(row: { mode: string; pointsPerUnit: number | null; unitSize: number | null; flatValue: number | null } | undefined): RateFlatState {
   return {
@@ -111,10 +134,19 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
     setSeason(data.season);
     const categories: CategoryOption[] = data.categories ?? [];
     const categoryPoints: CategoryPointsServerRow[] = data.categoryPoints ?? [];
+    const categoryWeights: CategoryWeightServerRow[] = data.categoryWeights ?? [];
     setCategoryRows(
       categories.map((c) => {
         const cp = categoryPoints.find((p) => p.categoryKey === c.key);
-        return { categoryKey: c.key, name: c.name, included: !!cp, ...toRateFlatState(cp) };
+        const cw = categoryWeights.find((w) => w.categoryKey === c.key);
+        return {
+          categoryKey: c.key,
+          name: c.name,
+          pointsIncluded: !!cp,
+          weightIncluded: !!cw,
+          weight: cw ? String(cw.weight) : "",
+          ...toRateFlatState(cp),
+        };
       })
     );
     setExtraItems(data.extraItems ?? []);
@@ -132,7 +164,7 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
   const locked = season.status === "final";
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl">
+    <div className="flex flex-col gap-8 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
           <Link href="/setup/seasons" className="text-xs text-accent hover:underline">
@@ -149,7 +181,7 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
 
       <BasicsSection season={season} locked={locked} onSaved={setSeason} />
 
-      <CategoryPointsSection seasonId={seasonId} rows={categoryRows} setRows={setCategoryRows} locked={locked} />
+      <CategoryScoringSection seasonId={seasonId} rows={categoryRows} setRows={setCategoryRows} locked={locked} />
 
       <ExtraItemsSection seasonId={seasonId} items={extraItems} setItems={setExtraItems} locked={locked} />
 
@@ -176,7 +208,7 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
       {locked && (
         <p className="text-neutral-500 text-sm">
           This season is finalized, so its config is locked here.{" "}
-          <Link href="/reports/season" className="text-accent hover:underline">
+          <Link href="/dashboards/season" className="text-accent hover:underline">
             Reopen it from Season Reports
           </Link>{" "}
           to edit again.
@@ -199,6 +231,7 @@ function BasicsSection({
   const [weekStart, setWeekStart] = useState(String(season.weekStart));
   const [weekEnd, setWeekEnd] = useState(String(season.weekEnd));
   const [totalBoxes, setTotalBoxes] = useState(String(season.totalBoxes));
+  const [scoringMode, setScoringMode] = useState(season.scoringMode);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +243,7 @@ function BasicsSection({
     const res = await fetch(`/api/seasons/${season.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, weekStart: Number(weekStart), weekEnd: Number(weekEnd), totalBoxes: Number(totalBoxes) }),
+      body: JSON.stringify({ name, weekStart: Number(weekStart), weekEnd: Number(weekEnd), totalBoxes: Number(totalBoxes), scoringMode }),
     });
     const data = await res.json();
     setSaving(false);
@@ -282,6 +315,31 @@ function BasicsSection({
           />
         </div>
       </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium">Scoring mode</label>
+        <div className="inline-flex border border-neutral-300 rounded overflow-hidden self-start">
+          {(["points", "positional"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              disabled={locked}
+              onClick={() => {
+                setScoringMode(mode);
+                setSaved(false);
+              }}
+              className={`px-3 py-1.5 text-sm disabled:cursor-not-allowed ${
+                scoringMode === mode ? "bg-accent text-accent-contrast" : "hover:bg-neutral-50"
+              }`}
+            >
+              {mode === "points" ? "Points-based" : "Positional-based"}
+            </button>
+          ))}
+        </div>
+        <p className="text-neutral-400 text-xs">
+          Switching is instant and non-destructive - both modes&apos; config stay saved and editable regardless of
+          which one is currently active.
+        </p>
+      </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       {!locked && (
         <div className="flex items-center gap-3">
@@ -295,7 +353,7 @@ function BasicsSection({
   );
 }
 
-function CategoryPointsSection({
+function CategoryScoringSection({
   seasonId,
   rows,
   setRows,
@@ -310,6 +368,9 @@ function CategoryPointsSection({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const totalWeight = rows.filter((r) => r.weightIncluded).reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+  const weightOk = rows.every((r) => !r.weightIncluded) || Math.abs(totalWeight - 1) < 0.2;
+
   function patchRow(categoryKey: string, patch: Partial<CategoryRowState>) {
     setSaved(false);
     setRows((prev) => prev.map((r) => (r.categoryKey === categoryKey ? { ...r, ...patch } : r)));
@@ -319,8 +380,9 @@ function CategoryPointsSection({
     setSaving(true);
     setSaved(false);
     setError(null);
-    const items = rows
-      .filter((r) => r.included)
+
+    const pointsItems = rows
+      .filter((r) => r.pointsIncluded)
       .map((r) => ({
         categoryKey: r.categoryKey,
         mode: r.mode,
@@ -328,15 +390,24 @@ function CategoryPointsSection({
         unitSize: r.mode === "rate" ? Number(r.unitSize) || 1 : null,
         flatValue: r.mode === "flat" ? Number(r.flatValue) || 0 : null,
       }));
-    const res = await fetch(`/api/seasons/${seasonId}/category-points`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
-    });
-    const data = await res.json();
+    const weightItems = rows.filter((r) => r.weightIncluded).map((r) => ({ categoryKey: r.categoryKey, weight: Number(r.weight) || 0 }));
+
+    const [pointsRes, weightsRes] = await Promise.all([
+      fetch(`/api/seasons/${seasonId}/category-points`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: pointsItems }),
+      }),
+      fetch(`/api/seasons/${seasonId}/category-weights`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: weightItems }),
+      }),
+    ]);
     setSaving(false);
-    if (!res.ok) {
-      setError(data.error ?? "Save failed.");
+    if (!pointsRes.ok || !weightsRes.ok) {
+      const failed = !pointsRes.ok ? await pointsRes.json() : await weightsRes.json();
+      setError(failed.error ?? "Save failed.");
       return;
     }
     setSaved(true);
@@ -344,39 +415,92 @@ function CategoryPointsSection({
 
   return (
     <div className="border border-neutral-200 rounded p-4 flex flex-col gap-3">
-      <h2 className="font-semibold">Category points</h2>
+      <h2 className="font-semibold">Category scoring</h2>
       <p className="text-neutral-500 text-xs">
-        Check a category to count it toward this season&apos;s score. Rate scores (weekly value / unit size) × points per
-        unit; Flat scores a fixed value for any week the member has a value at all.
+        Points mode: Rate scores (weekly value / unit size) × points per unit; Flat scores a fixed value for any
+        week the member has a value at all. Positional mode: each commander&apos;s season-total rank in that category
+        converts to a 0-100 score (best = 100, worst = 0), multiplied by its weight. Both configs stay saved
+        regardless of which scoring mode is currently active.
       </p>
-      <div className="flex flex-col gap-2">
-        {rows.map((row) => (
-          <div key={row.categoryKey} className="flex items-center gap-3 text-sm flex-wrap">
-            <label className="flex items-center gap-2 w-40 shrink-0">
-              <input
-                type="checkbox"
-                disabled={locked}
-                checked={row.included}
-                onChange={(e) => patchRow(row.categoryKey, { included: e.target.checked })}
-              />
-              {row.name}
-            </label>
-            {row.included && <RateFlatFields state={row} onChange={(patch) => patchRow(row.categoryKey, patch)} locked={locked} />}
-          </div>
-        ))}
-        {rows.length === 0 && <p className="text-neutral-400 text-sm">No active categories to score.</p>}
+      <div className="overflow-x-auto">
+        <table className="text-sm border-collapse">
+          <thead>
+            <tr className="text-left text-xs font-medium text-neutral-500">
+              <th className="py-1 pr-4">Category</th>
+              <th className="py-1 pr-4">Points mode</th>
+              <th className="py-1 pr-4">Positional mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.categoryKey} className="border-t border-neutral-100">
+                <td className="py-2 pr-4 font-medium whitespace-nowrap align-top">{row.name}</td>
+                <td className="py-2 pr-4 align-top">
+                  <label className="flex items-center gap-2 mb-1">
+                    <input
+                      type="checkbox"
+                      disabled={locked}
+                      checked={row.pointsIncluded}
+                      onChange={(e) => patchRow(row.categoryKey, { pointsIncluded: e.target.checked })}
+                    />
+                    Include
+                  </label>
+                  {row.pointsIncluded && <RateFlatFields state={row} onChange={(patch) => patchRow(row.categoryKey, patch)} locked={locked} />}
+                </td>
+                <td className="py-2 pr-4 align-top">
+                  <label className="flex items-center gap-2 mb-1">
+                    <input
+                      type="checkbox"
+                      disabled={locked}
+                      checked={row.weightIncluded}
+                      onChange={(e) => patchRow(row.categoryKey, { weightIncluded: e.target.checked })}
+                    />
+                    Include
+                  </label>
+                  {row.weightIncluded && (
+                    <WeightField value={row.weight} onChange={(v) => patchRow(row.categoryKey, { weight: v })} locked={locked} />
+                  )}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-2 text-neutral-400">
+                  No active categories to score.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
+      {rows.some((r) => r.weightIncluded) && (
+        <p className={`text-xs ${weightOk ? "text-neutral-500" : "text-amber-600"}`}>
+          Total positional weight: {totalWeight.toFixed(2)}
+          {!weightOk && " — typically chosen to sum to ~1"}
+        </p>
+      )}
       {error && <p className="text-red-600 text-sm">{error}</p>}
       {!locked && (
         <div className="flex items-center gap-3">
           <button onClick={handleSave} disabled={saving} className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50">
-            {saving ? "Saving…" : "Save category points"}
+            {saving ? "Saving…" : "Save category scoring"}
           </button>
           {saved && <span className="text-green-700 text-sm">Saved</span>}
         </div>
       )}
     </div>
   );
+}
+
+type ExtraItemFormState = { pointsEnabled: boolean; rateFlat: RateFlatState; weightEnabled: boolean; weight: string };
+
+function toExtraItemFormState(item: ExtraItem): ExtraItemFormState {
+  return {
+    pointsEnabled: item.mode != null,
+    rateFlat: toRateFlatState(item.mode != null ? { mode: item.mode, pointsPerUnit: item.pointsPerUnit, unitSize: item.unitSize, flatValue: item.flatValue } : undefined),
+    weightEnabled: item.weight != null,
+    weight: item.weight !== null && item.weight !== undefined ? String(item.weight) : "",
+  };
 }
 
 function ExtraItemsSection({
@@ -423,15 +547,16 @@ function ExtraItemsSection({
     setItems((prev) => prev.filter((i) => i.id !== item.id));
   }
 
-  async function handleItemSave(item: ExtraItem, state: RateFlatState) {
+  async function handleItemSave(item: ExtraItem, state: ExtraItemFormState) {
     const res = await fetch(`/api/seasons/${seasonId}/extra-items/${item.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mode: state.mode,
-        pointsPerUnit: state.mode === "rate" ? Number(state.pointsPerUnit) || 0 : null,
-        unitSize: state.mode === "rate" ? Number(state.unitSize) || 1 : null,
-        flatValue: state.mode === "flat" ? Number(state.flatValue) || 0 : null,
+        mode: state.pointsEnabled ? state.rateFlat.mode : null,
+        pointsPerUnit: state.pointsEnabled && state.rateFlat.mode === "rate" ? Number(state.rateFlat.pointsPerUnit) || 0 : null,
+        unitSize: state.pointsEnabled && state.rateFlat.mode === "rate" ? Number(state.rateFlat.unitSize) || 1 : null,
+        flatValue: state.pointsEnabled && state.rateFlat.mode === "flat" ? Number(state.rateFlat.flatValue) || 0 : null,
+        weight: state.weightEnabled ? Number(state.weight) || 0 : null,
       }),
     });
     const data = await res.json();
@@ -444,9 +569,9 @@ function ExtraItemsSection({
       <h2 className="font-semibold">Season-specific items</h2>
       <p className="text-neutral-500 text-xs">
         Items that don&apos;t exist outside this season (e.g. CrystalGold, Capture) - their values come from a one-time
-        upload, not the weekly pipeline.
+        upload, not the weekly pipeline. Configure points and/or positional scoring per item, or neither yet.
       </p>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         {items.map((item) => (
           <ExtraItemRow key={item.id} item={item} locked={locked} onSave={handleItemSave} onDelete={() => handleDelete(item)} />
         ))}
@@ -483,10 +608,10 @@ function ExtraItemRow({
 }: {
   item: ExtraItem;
   locked: boolean;
-  onSave: (item: ExtraItem, state: RateFlatState) => Promise<boolean>;
+  onSave: (item: ExtraItem, state: ExtraItemFormState) => Promise<boolean>;
   onDelete: () => void;
 }) {
-  const [state, setState] = useState<RateFlatState>(toRateFlatState(item));
+  const [state, setState] = useState<ExtraItemFormState>(toExtraItemFormState(item));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -498,21 +623,63 @@ function ExtraItemRow({
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm flex-wrap">
-      <span className="w-40 shrink-0 font-medium">
-        {item.name}
-        {item.valueCount > 0 && <span className="text-neutral-400 text-xs ml-1">({item.valueCount} uploaded)</span>}
-      </span>
-      <RateFlatFields
-        state={state}
-        onChange={(patch) => {
-          setState((s) => ({ ...s, ...patch }));
-          setSaved(false);
-        }}
-        locked={locked}
-      />
+    <div className="border border-neutral-100 rounded p-3 flex flex-col gap-2">
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-medium">{item.name}</span>
+        {item.valueCount > 0 && <span className="text-neutral-400 text-xs">({item.valueCount} uploaded)</span>}
+      </div>
+      <div className="flex items-start gap-6 flex-wrap text-sm">
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              disabled={locked}
+              checked={state.pointsEnabled}
+              onChange={(e) => {
+                setState((s) => ({ ...s, pointsEnabled: e.target.checked }));
+                setSaved(false);
+              }}
+            />
+            Points mode
+          </label>
+          {state.pointsEnabled && (
+            <RateFlatFields
+              state={state.rateFlat}
+              onChange={(patch) => {
+                setState((s) => ({ ...s, rateFlat: { ...s.rateFlat, ...patch } }));
+                setSaved(false);
+              }}
+              locked={locked}
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              disabled={locked}
+              checked={state.weightEnabled}
+              onChange={(e) => {
+                setState((s) => ({ ...s, weightEnabled: e.target.checked }));
+                setSaved(false);
+              }}
+            />
+            Positional mode
+          </label>
+          {state.weightEnabled && (
+            <WeightField
+              value={state.weight}
+              onChange={(v) => {
+                setState((s) => ({ ...s, weight: v }));
+                setSaved(false);
+              }}
+              locked={locked}
+            />
+          )}
+        </div>
+      </div>
       {!locked && (
-        <>
+        <div className="flex items-center gap-3">
           <button onClick={handleSave} disabled={saving} className="border border-neutral-300 rounded px-3 py-1 text-xs disabled:opacity-50">
             {saving ? "Saving…" : "Save"}
           </button>
@@ -520,7 +687,7 @@ function ExtraItemRow({
           <button onClick={onDelete} className="text-red-600 hover:text-red-800 text-xs">
             Delete
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -574,6 +741,10 @@ function BandsSection({
   return (
     <div className="border border-neutral-200 rounded p-4 flex flex-col gap-3">
       <h2 className="font-semibold">Reward bands</h2>
+      <p className="text-neutral-500 text-xs">
+        Bands operate purely on the ranked list, whichever scoring mode produced it - they don&apos;t know or care
+        which mode is active.
+      </p>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3 text-xs font-medium text-neutral-500">
           <span className="w-10">Order</span>
@@ -631,4 +802,3 @@ function BandsSection({
     </div>
   );
 }
-

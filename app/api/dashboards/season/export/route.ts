@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     { header: "Commander", key: "member", width: 20 },
     ...data.categories.map((c) => ({ header: c.name, key: `cat_${c.key}`, width: 14 })),
     ...data.extraItems.map((i) => ({ header: i.name, key: `extra_${i.key}`, width: 14 })),
-    { header: "Season Points", key: "seasonPoints", width: 14 },
+    { header: "Season Score", key: "seasonScore", width: 14 },
     { header: "Band", key: "band", width: 8 },
     { header: "Boxes", key: "boxes", width: 8 },
   ];
@@ -32,12 +32,12 @@ export async function GET(request: Request) {
     const rowData: Record<string, number | string> = {
       rank: r.rank,
       member: r.memberName,
-      seasonPoints: r.seasonPoints,
+      seasonScore: r.seasonScore,
       band: r.bandOrder ?? "—",
       boxes: r.boxesAwarded,
     };
-    for (const c of data.categories) rowData[`cat_${c.key}`] = r.categoryPoints[c.key] ?? 0;
-    for (const i of data.extraItems) rowData[`extra_${i.key}`] = r.extraPoints[i.key] ?? 0;
+    for (const c of data.categories) rowData[`cat_${c.key}`] = r.categoryValues[c.key] ?? 0;
+    for (const i of data.extraItems) rowData[`extra_${i.key}`] = r.extraValues[i.key] ?? 0;
     sheet.addRow(rowData);
   }
 

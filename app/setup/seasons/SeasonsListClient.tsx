@@ -9,8 +9,11 @@ type Season = {
   weekStart: number;
   weekEnd: number;
   totalBoxes: number;
+  scoringMode: string;
   status: string;
 };
+
+const MODE_LABELS: Record<string, string> = { points: "Points", positional: "Positional" };
 
 type FormState = { name: string; weekStart: string; weekEnd: string; totalBoxes: string };
 
@@ -152,6 +155,7 @@ export function SeasonsListClient() {
               <tr className="border-b border-neutral-300 text-left">
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 pr-3">Weeks</th>
+                <th className="py-2 pr-3">Mode</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Total boxes</th>
               </tr>
@@ -167,6 +171,7 @@ export function SeasonsListClient() {
                   <td className="py-2 pr-3 text-neutral-500">
                     {s.weekStart}–{s.weekEnd}
                   </td>
+                  <td className="py-2 pr-3 text-neutral-500">{MODE_LABELS[s.scoringMode] ?? s.scoringMode}</td>
                   <td className="py-2 pr-3">
                     <span
                       className={`px-2 py-0.5 rounded text-xs font-medium ${

@@ -240,29 +240,35 @@ model ConductorSelection {
 // One reward season - a fixed week range at the end of which contribution is scored and reward
 // boxes are distributed. "draft" can still have its scoring config and bands edited, and its
 // report is computed live; "final" is locked and its report reads the frozen SeasonResult rows
-// instead (mirrors ConductorRound's draft/confirmed convention).
+// instead (mirrors ConductorRound's draft/confirmed convention). scoringMode picks which of the
+// two parallel configs below (SeasonCategoryPoints vs SeasonCategoryWeight) is actually used when
+// computing the live report or finalizing - both stay saved regardless of which is active, so
+// toggling never loses data.
 model Season {
   id          Int       @id @default(autoincrement())
   name        String    @unique
   weekStart   Int
   weekEnd     Int
   totalBoxes  Int
+  scoringMode String    @default("points") // "points" | "positional"
   status      String    @default("draft") // "draft" | "final"
   finalizedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  categoryPoints SeasonCategoryPoints[]
-  extraItems     SeasonExtraItem[]
-  bands          SeasonBand[]
-  results        SeasonResult[]
+  categoryPoints  SeasonCategoryPoints[]
+  categoryWeights SeasonCategoryWeight[]
+  extraItems      SeasonExtraItem[]
+  bands           SeasonBand[]
+  results         SeasonResult[]
 }
 
-// Points config for one existing Category's contribution to one season's score. Mirrors
+// Points-mode config for one existing Category's contribution to one season's score. Mirrors
 // Category.conductorMode/conductorPointsPerUnit/conductorUnitSize/conductorFlatValue, but scoped
 // per season instead of global - a category can be worth different points in different seasons,
-// and a category not listed here simply doesn't count toward this season's score at all (no "off"
-// mode needed - presence in this table IS the "on" switch).
+// and a category not listed here simply doesn't count toward points-mode scoring at all (no "off"
+// mode needed - presence in this table IS the "on" switch). Only read when
+// Season.scoringMode === "points".
 model SeasonCategoryPoints {
   id            Int    @id @default(autoincrement())
   seasonId      Int
@@ -276,20 +282,41 @@ model SeasonCategoryPoints {
   @@unique([seasonId, categoryKey])
 }
 
+// Positional-mode config for one existing Category's contribution to one season's score. Presence
+// here = included in positional scoring, independent of whether the same category is also
+// included in SeasonCategoryPoints for points mode - a category can be in one, both, or neither.
+// `weight` is a plain multiplier applied to that category's 0-100 positional score, same
+// convention as lib/mvp/weights.ts (weights are typically chosen to sum to ~1, but nothing
+// enforces that beyond a soft UI warning). Only read when Season.scoringMode === "positional".
+model SeasonCategoryWeight {
+  id          Int    @id @default(autoincrement())
+  seasonId    Int
+  season      Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  categoryKey String
+  weight      Float
+
+  @@unique([seasonId, categoryKey])
+}
+
 // A season-specific scoring item that doesn't exist as a permanent Category (e.g. Season 6's
 // CrystalGold, Capture). `key` is slugified from `name` at creation time (lowercase,
 // non-alphanumeric -> "_"), same convention as Category.key. Values are a one-time per-commander
-// total (SeasonExtraValue), not a weekly series.
+// total (SeasonExtraValue), not a weekly series - shared by both scoring modes, since the
+// uploaded raw total is the same number either way. mode/pointsPerUnit/unitSize/flatValue are
+// points-mode config (used when scoringMode === "points"); weight is positional-mode config (used
+// when scoringMode === "positional"). Either, both, or neither can be set - an item with neither
+// configured simply doesn't count toward either mode's score yet.
 model SeasonExtraItem {
   id            Int      @id @default(autoincrement())
   seasonId      Int
   season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   key           String
   name          String
-  mode          String // "rate" | "flat"
+  mode          String? // "rate" | "flat" - points-mode config
   pointsPerUnit Float?
   unitSize      Float?
   flatValue     Float?
+  weight        Float? // positional-mode config
   createdAt     DateTime @default(now())
 
   values SeasonExtraValue[]
@@ -316,7 +343,8 @@ model SeasonExtraValue {
 // One reward band for a season, in rank order. Band `order` 1 covers the top `commanderCount`
 // ranked commanders, `order` 2 covers the next `commanderCount`, and so on - NOT an explicit
 // rank-from/rank-to range, so reordering or resizing an earlier band automatically shifts every
-// band after it. `pctOfBoxes` is a percentage (0-100) of the season's totalBoxes.
+// band after it. `pctOfBoxes` is a percentage (0-100) of the season's totalBoxes. Bands don't know
+// or care which scoringMode produced the ranked list they're applied to.
 model SeasonBand {
   id             Int    @id @default(autoincrement())
   seasonId       Int
@@ -330,8 +358,12 @@ model SeasonBand {
 
 // Frozen per-commander result, written once when a season is finalized (mirrors
 // ConductorSelection.pointsAtSelection - a snapshot, not something later data edits should move).
-// `breakdown` is a JSON string: { categories: {key: points}, extras: {key: points} } for the
-// report's per-item columns and for audit if a commander disputes their score.
+// `breakdown` is a JSON string recording which scoringMode produced it and the full per-category/
+// per-item detail (points mode: {mode:"points", categories:{key:points}, extras:{key:points}};
+// positional mode: {mode:"positional", categories:{key:{rank,n,positionalScore,weight,contribution}},
+// extras:{...}}) - for the report's per-item columns and for audit if a commander disputes their
+// score. `seasonScore` is generically named (not `seasonPoints`) since it holds whichever mode's
+// combined total was active at finalize time.
 model SeasonResult {
   id           Int      @id @default(autoincrement())
   seasonId     Int
@@ -339,7 +371,7 @@ model SeasonResult {
   memberId     Int
   member       Member   @relation(fields: [memberId], references: [id])
   rank         Int
-  seasonPoints Float
+  seasonScore  Float
   bandOrder    Int? // null = ranked below every configured band, 0 boxes
   boxesAwarded Int
   breakdown    String   @default("{}")

@@ -49,18 +49,8 @@ export default async function Home() {
           index={3}
         />
       )}
-      {visible("home-season-reports") && (
-        <MenuButton
-          href="/reports/season"
-          label="Season Reports"
-          description="Season Points standings and reward box distribution"
-          icon="🎁"
-          accentKey="season-reports"
-          index={4}
-        />
-      )}
       {visible("home-settings") && (
-        <MenuButton href="/setup" label="Settings" description="Categories and configuration" icon="⚙️" accentKey="settings" index={5} />
+        <MenuButton href="/setup" label="Settings" description="Categories and configuration" icon="⚙️" accentKey="settings" index={4} />
       )}
     </div>
   );

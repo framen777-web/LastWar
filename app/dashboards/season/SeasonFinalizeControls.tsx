@@ -24,7 +24,7 @@ export function SeasonFinalizeControls({
   async function handleFinalize() {
     if (
       !confirm(
-        "This locks scoring config and freezes the current results as the official reward list. You can reopen it later if needed."
+        "This locks scoring config and freezes the current results - computed under the season's current scoring mode - as the official reward list. You can reopen it later if needed."
       )
     )
       return;
@@ -61,7 +61,7 @@ export function SeasonFinalizeControls({
         <>
           <p className="text-neutral-500 text-sm">
             Finalized{finalizedAt ? ` on ${new Date(finalizedAt).toLocaleString()}` : ""}. This report reads the frozen result rows -
-            reopen to unlock scoring config and go back to live numbers.
+            reopen to unlock scoring config (including the scoring-mode toggle) and go back to live numbers.
           </p>
           <button
             onClick={handleReopen}

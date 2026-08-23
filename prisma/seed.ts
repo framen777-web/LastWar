@@ -145,13 +145,6 @@ const MENU_ITEMS = [
     parentKey: "home-conductor",
   },
   { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
-  {
-    key: "home-season-reports",
-    label: "Season Reports",
-    href: "/reports/season",
-    roles: ["ADMIN", "LEADER", "MEMBER"],
-    parentKey: null,
-  },
   { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"], parentKey: null },
 
   { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"], parentKey: "home-uploads" },
@@ -221,6 +214,14 @@ const MENU_ITEMS = [
     label: "End of Week Reports",
     href: "/reports",
     roles: ["ADMIN", "LEADER"],
+    parentKey: "home-dashboards",
+  },
+
+  {
+    key: "dashboards-season",
+    label: "Season Reports",
+    href: "/dashboards/season",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
     parentKey: "home-dashboards",
   },
 
