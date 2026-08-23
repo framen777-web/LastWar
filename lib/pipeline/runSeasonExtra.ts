@@ -3,6 +3,7 @@ import { generateJson } from "@/lib/ai/gemini";
 import { buildClassifyPrompt, buildClassifySchema, CONFIDENCE_THRESHOLD, type CategoryForPrompt } from "@/lib/ai/prompts";
 import { extract, type RankingListResult } from "@/lib/ai/extract";
 import { matchMember } from "./matchMember";
+import { hasAllianceTag } from "./matchMemberCore";
 
 export type SeasonExtraPipelineStatus = "committed" | "needs_review" | "error";
 export type SeasonExtraPipelineResult = {
@@ -10,6 +11,8 @@ export type SeasonExtraPipelineResult = {
   itemKey: string;
   confidence: number;
   status: SeasonExtraPipelineStatus;
+  writtenCount?: number;
+  skippedCount?: number; // rows with no alliance-tag prefix - see writeSeasonExtraRows below
   message?: string;
 };
 
@@ -74,10 +77,10 @@ export async function runSeasonExtraPipelineForImage(params: {
     const pseudoCategory: CategoryForPrompt = { key: item.key, name: item.name, description: null, shape: "ranking_list" };
     const extracted = (await extract(pseudoCategory, imageBase64, params.mimeType)) as RankingListResult;
 
-    await writeSeasonExtraRows(item.id, extracted);
+    const { written, skipped } = await writeSeasonExtraRows(item.id, extracted);
     await logResult(params, itemKey, confidence, "committed", JSON.stringify(extracted));
 
-    return { filename: params.filename, itemKey, confidence, status: "committed" };
+    return { filename: params.filename, itemKey, confidence, status: "committed", writtenCount: written, skippedCount: skipped };
   } catch (err) {
     await logResult(params, itemKey, confidence, "needs_review");
     return { filename: params.filename, itemKey, confidence, status: "error", message: describeError(err) };
@@ -92,16 +95,36 @@ export async function runSeasonExtraPipelineForImage(params: {
  *  paginated across several screenshots (e.g. ranks 1-50, then 51-100) works naturally here with
  *  no extra handling: each screenshot only touches the members it actually lists, so uploading
  *  the second page doesn't disturb the first page's members. Re-uploading a corrected screenshot
- *  for a member already written just overwrites their value, which is the desired fix path. */
-async function writeSeasonExtraRows(itemId: number, extracted: RankingListResult): Promise<void> {
+ *  for a member already written just overwrites their value, which is the desired fix path.
+ *
+ *  A season-summary screenshot covers everyone who contributed at ANY point in the season,
+ *  including members who've since left - unlike a weekly screenshot (taken while everyone shown
+ *  is still current), so it's the one place this actually comes up. The game only tags CURRENT
+ *  alliance members with the "[RUNE] " prefix; a departed member's row shows their bare name with
+ *  no bracket tag at all. Rows without that tag are skipped entirely here - not matched, not
+ *  auto-created, not written - both because departed members don't collect season rewards anyway
+ *  (see the isActive filter in computeSeasonPoints/computeSeasonPositional) and because matching
+ *  an untagged name against the roster is more likely to misfire (coincidental fuzzy match, or a
+ *  spurious new Member row) than to help. This check is scoped to season extras only - the
+ *  regular weekly pipeline (lib/pipeline/run.ts) doesn't need it, since a live weekly screenshot
+ *  naturally only shows people who were still tagged members at that moment. */
+async function writeSeasonExtraRows(itemId: number, extracted: RankingListResult): Promise<{ written: number; skipped: number }> {
+  let written = 0;
+  let skipped = 0;
   for (const row of extracted.rows) {
+    if (!hasAllianceTag(row.member_name)) {
+      skipped++;
+      continue;
+    }
     const memberId = await matchMember(row.member_name);
     await prisma.seasonExtraValue.upsert({
       where: { itemId_memberId: { itemId, memberId } },
       update: { rawValue: row.value },
       create: { itemId, memberId, rawValue: row.value },
     });
+    written++;
   }
+  return { written, skipped };
 }
 
 async function logResult(

@@ -2,13 +2,22 @@ const MATCH_THRESHOLD_RATIO = 0.2;
 
 export type MatchableMember = { id: number; name: string; aliases: string };
 
+const ALLIANCE_TAG_PATTERN = /^\s*\[[^\]]*\]\s*/;
+
+/** Whether a raw name is prefixed with the alliance tag, e.g. "[RUNE] SomeName" - only CURRENT
+ *  alliance members get this prefix in-game, so its absence marks a departed member on a
+ *  screenshot that otherwise covers historical contributors (see runSeasonExtra.ts). */
+export function hasAllianceTag(name: string): boolean {
+  return ALLIANCE_TAG_PATTERN.test(name);
+}
+
 /**
  * Screenshots show member names prefixed with the alliance tag, e.g.
  * "[RUNE] SomeName" - that's the alliance name, not part of the member's
  * name, so it's stripped before matching/storing.
  */
 export function stripAllianceTag(name: string): string {
-  return name.replace(/^\s*\[[^\]]*\]\s*/, "").trim();
+  return name.replace(ALLIANCE_TAG_PATTERN, "").trim();
 }
 
 export function normalize(name: string): string {

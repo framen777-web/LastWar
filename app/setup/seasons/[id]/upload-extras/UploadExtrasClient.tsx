@@ -14,6 +14,8 @@ type PipelineResult = {
   itemKey: string;
   confidence: number;
   status: "committed" | "needs_review" | "error";
+  writtenCount?: number;
+  skippedCount?: number;
   message?: string;
 };
 
@@ -245,13 +247,21 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
           <h2 className="font-medium">Results</h2>
           <ul className="flex flex-col gap-2">
             {results.map((r, i) => (
-              <li key={i} className="border border-neutral-200 rounded px-3 py-2 flex items-center justify-between gap-3 text-sm">
-                <span className="truncate flex-1">{r.filename}</span>
-                <span className="text-neutral-500">{itemName(r.itemKey)}</span>
-                <span className="text-neutral-500">{Math.round(r.confidence * 100)}%</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${STATUS_STYLES[r.status]}`}>
-                  {STATUS_LABELS[r.status]}
-                </span>
+              <li key={i} className="border border-neutral-200 rounded px-3 py-2 flex flex-col gap-1 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate flex-1">{r.filename}</span>
+                  <span className="text-neutral-500">{itemName(r.itemKey)}</span>
+                  <span className="text-neutral-500">{Math.round(r.confidence * 100)}%</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${STATUS_STYLES[r.status]}`}>
+                    {STATUS_LABELS[r.status]}
+                  </span>
+                </div>
+                {r.status === "committed" && r.writtenCount !== undefined && (
+                  <p className="text-neutral-400 text-xs">
+                    {r.writtenCount} written
+                    {r.skippedCount !== undefined && r.skippedCount > 0 && `, ${r.skippedCount} skipped (no alliance tag — likely departed)`}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
