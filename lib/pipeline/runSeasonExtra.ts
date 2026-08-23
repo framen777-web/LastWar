@@ -99,9 +99,11 @@ export async function runSeasonExtraPipelineForImage(params: {
  *
  *  A season-summary screenshot covers everyone who contributed at ANY point in the season,
  *  including members who've since left - unlike a weekly screenshot (taken while everyone shown
- *  is still current), so it's the one place this actually comes up. The game only tags CURRENT
- *  alliance members with the "[RUNE] " prefix; a departed member's row shows their bare name with
- *  no bracket tag at all. Rows without that tag are skipped entirely here - not matched, not
+ *  is still current), so it's the one place this actually comes up. The game only tags members
+ *  CURRENTLY in RUNE with the "[RUNE] " prefix; a departed member's row shows either their bare
+ *  name (no tag at all) or a different alliance's tag if they joined elsewhere - hasAllianceTag()
+ *  checks for "RUNE" specifically (see matchMemberCore.ts), not just "some bracket," so both
+ *  cases are caught. Rows that fail that check are skipped entirely here - not matched, not
  *  auto-created, not written - both because departed members don't collect season rewards anyway
  *  (see the isActive filter in computeSeasonPoints/computeSeasonPositional) and because matching
  *  an untagged name against the roster is more likely to misfire (coincidental fuzzy match, or a

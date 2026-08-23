@@ -2,11 +2,17 @@ const MATCH_THRESHOLD_RATIO = 0.2;
 
 export type MatchableMember = { id: number; name: string; aliases: string };
 
-const ALLIANCE_TAG_PATTERN = /^\s*\[[^\]]*\]\s*/;
+// This app tracks exactly one alliance - RUNE. Screenshots prefix a CURRENT member's name with
+// "[RUNE] " (whitespace and case can vary slightly, e.g. "[ Rune ]"); anyone else's name is either
+// bare (untagged) or carries a different alliance's tag (they left and joined elsewhere) - either
+// way, not "[RUNE]", so hasAllianceTag() must check for that specific text, not just "some bracket."
+const ALLIANCE_TAG = "RUNE";
+const ALLIANCE_TAG_PATTERN = new RegExp(`^\\s*\\[\\s*${ALLIANCE_TAG}\\s*\\]\\s*`, "i");
 
-/** Whether a raw name is prefixed with the alliance tag, e.g. "[RUNE] SomeName" - only CURRENT
- *  alliance members get this prefix in-game, so its absence marks a departed member on a
- *  screenshot that otherwise covers historical contributors (see runSeasonExtra.ts). */
+/** Whether a raw name is prefixed with the RUNE alliance tag, e.g. "[RUNE] SomeName" - only
+ *  CURRENT alliance members get this prefix in-game, so its absence (bare name, or a different
+ *  alliance's tag) marks a departed member on a screenshot that otherwise covers historical
+ *  contributors (see runSeasonExtra.ts). */
 export function hasAllianceTag(name: string): boolean {
   return ALLIANCE_TAG_PATTERN.test(name);
 }
