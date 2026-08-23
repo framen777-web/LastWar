@@ -133,18 +133,23 @@ export default async function AllianceGraphsPage({ searchParams }: PageProps<"/d
       <ZoomWrapper contentId="alliance-graph-content">
         <div className="border border-neutral-200 rounded overflow-hidden">
           <div className="bg-sky-300 px-3 py-1 font-semibold text-neutral-900">{chartTitle}</div>
-          {stats && (
-            <div className="flex items-center gap-4 text-sm px-4 pt-3 flex-wrap">
-              <span><span className="text-neutral-500">Average:</span> <span className="font-medium">{formatStatNumber(stats.average)}</span></span>
-              <span><span className="text-neutral-500">Max:</span> <span className="font-medium">{formatStatNumber(stats.max)}</span></span>
-              <span><span className="text-neutral-500">Min:</span> <span className="font-medium">{formatStatNumber(stats.min)}</span></span>
-            </div>
-          )}
           <div className="p-4">
             {bars.every((b) => b.value === 0) ? (
               <p className="text-neutral-500 text-sm">No data for this selection.</p>
             ) : (
-              <BarChart bars={bars} formatValue={formatStatNumber} />
+              <BarChart
+                bars={bars}
+                formatValue={formatStatNumber}
+                lines={
+                  stats
+                    ? [
+                        { label: "Max", value: stats.max, colorClass: "border-green-500" },
+                        { label: "Avg", value: stats.average, colorClass: "border-neutral-400" },
+                        { label: "Min", value: stats.min, colorClass: "border-red-400" },
+                      ]
+                    : undefined
+                }
+              />
             )}
           </div>
         </div>

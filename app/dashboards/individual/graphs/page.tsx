@@ -94,18 +94,23 @@ export default async function IndividualGraphsPage({ searchParams }: PageProps<"
       <ZoomWrapper contentId="individual-graph-content">
         <div className="border border-neutral-200 rounded overflow-hidden">
           <div className="bg-sky-300 px-3 py-1 font-semibold text-neutral-900">{selectedMetric.label}</div>
-          {stats && (
-            <div className="flex items-center gap-4 text-sm px-4 pt-3 flex-wrap">
-              <span><span className="text-neutral-500">Average:</span> <span className="font-medium">{formatStatNumber(stats.average)}</span></span>
-              <span><span className="text-neutral-500">Max:</span> <span className="font-medium">{formatStatNumber(stats.max)}</span></span>
-              <span><span className="text-neutral-500">Min:</span> <span className="font-medium">{formatStatNumber(stats.min)}</span></span>
-            </div>
-          )}
           <div className="p-4">
             {selectedWeeks.length === 0 || bars.every((b) => b.value === 0) ? (
               <p className="text-neutral-500 text-sm">No data yet.</p>
             ) : (
-              <BarChart bars={bars} formatValue={formatStatNumber} />
+              <BarChart
+                bars={bars}
+                formatValue={formatStatNumber}
+                lines={
+                  stats
+                    ? [
+                        { label: "Max", value: stats.max, colorClass: "border-green-500" },
+                        { label: "Avg", value: stats.average, colorClass: "border-neutral-400" },
+                        { label: "Min", value: stats.min, colorClass: "border-red-400" },
+                      ]
+                    : undefined
+                }
+              />
             )}
           </div>
         </div>
