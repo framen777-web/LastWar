@@ -259,7 +259,7 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
                 {r.status === "committed" && r.writtenCount !== undefined && (
                   <p className="text-neutral-400 text-xs">
                     {r.writtenCount} written
-                    {r.skippedCount !== undefined && r.skippedCount > 0 && `, ${r.skippedCount} skipped (not tagged [RUNE] — departed)`}
+                    {r.skippedCount !== undefined && r.skippedCount > 0 && `, ${r.skippedCount} skipped (not currently tagged — departed)`}
                   </p>
                 )}
               </li>

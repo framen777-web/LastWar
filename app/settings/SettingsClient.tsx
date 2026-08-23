@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SUMMARY_MODE_LABELS, type SummaryMode } from "@/lib/reports/summaryMode";
 
 export function SettingsClient() {
+  const [allianceTag, setAllianceTag] = useState("RUNE");
   const [minPasswordLength, setMinPasswordLength] = useState("8");
   const [r1BottomWeeksWindow, setR1BottomWeeksWindow] = useState("5");
   const [mvpSummaryMode, setMvpSummaryMode] = useState<SummaryMode>("sum");
@@ -20,6 +21,7 @@ export function SettingsClient() {
     fetch("/api/settings")
       .then((res) => res.json())
       .then((data) => {
+        setAllianceTag(data.settings?.allianceTag || "RUNE");
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
         setR1BottomWeeksWindow(data.settings?.r1BottomWeeksWindow ?? "5");
         setMvpSummaryMode((data.settings?.mvpSummaryMode as SummaryMode) ?? "sum");
@@ -44,6 +46,7 @@ export function SettingsClient() {
     }
 
     const body: Record<string, string> = {
+      allianceTag: allianceTag.trim() || "RUNE",
       minPasswordLength: String(minLength),
       r1BottomWeeksWindow: String(Math.max(1, Number(r1BottomWeeksWindow) || 5)),
       mvpSummaryMode,
@@ -71,6 +74,28 @@ export function SettingsClient() {
       <h1 className="text-xl font-semibold">Settings</h1>
 
       <form onSubmit={handleSave} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="allianceTag" className="text-sm font-medium">
+            Alliance code
+          </label>
+          <input
+            id="allianceTag"
+            type="text"
+            value={allianceTag}
+            onChange={(e) => {
+              setAllianceTag(e.target.value);
+              setSaved(false);
+            }}
+            disabled={loading}
+            className="border border-neutral-300 rounded px-3 py-2 w-32"
+          />
+          <p className="text-neutral-500 text-xs">
+            The alliance tag shown in brackets before a member&apos;s name in screenshots (e.g.
+            &quot;[RUNE] SomeName&quot;). Used by Season Extras uploads to tell current members from
+            people who&apos;ve left. Matching ignores case, so &quot;RUNE&quot; also matches &quot;RuNE&quot; or &quot;rune&quot;.
+          </p>
+        </div>
+
         <div className="flex flex-col gap-1">
           <label htmlFor="minPasswordLength" className="text-sm font-medium">
             Minimum password length

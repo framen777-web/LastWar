@@ -17,3 +17,11 @@ export async function getGeneralPassword(): Promise<string | undefined> {
   const setting = await prisma.setting.findUnique({ where: { key: "generalPassword" } });
   return setting?.value || undefined;
 }
+
+const DEFAULT_ALLIANCE_TAG = "RUNE";
+
+export async function getAllianceTag(): Promise<string> {
+  const setting = await prisma.setting.findUnique({ where: { key: "allianceTag" } });
+  const value = setting?.value?.trim();
+  return value || DEFAULT_ALLIANCE_TAG;
+}

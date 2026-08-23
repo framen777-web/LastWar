@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { generateJson } from "@/lib/ai/gemini";
 import { buildClassifyPrompt, buildClassifySchema, CONFIDENCE_THRESHOLD, type CategoryForPrompt } from "@/lib/ai/prompts";
 import { extract, type RankingListResult } from "@/lib/ai/extract";
+import { getAllianceTag } from "@/lib/settings";
 import { matchMember } from "./matchMember";
 import { hasAllianceTag } from "./matchMemberCore";
 
@@ -47,6 +48,7 @@ export async function runSeasonExtraPipelineForImage(params: {
   forcedItemKey?: string;
 }): Promise<SeasonExtraPipelineResult> {
   const imageBase64 = params.buffer.toString("base64");
+  const allianceTag = await getAllianceTag();
 
   let itemKey = params.forcedItemKey ?? "unknown";
   let confidence = params.forcedItemKey ? 1 : 0;
@@ -77,7 +79,7 @@ export async function runSeasonExtraPipelineForImage(params: {
     const pseudoCategory: CategoryForPrompt = { key: item.key, name: item.name, description: null, shape: "ranking_list" };
     const extracted = (await extract(pseudoCategory, imageBase64, params.mimeType)) as RankingListResult;
 
-    const { written, skipped } = await writeSeasonExtraRows(item.id, extracted);
+    const { written, skipped } = await writeSeasonExtraRows(item.id, extracted, allianceTag);
     await logResult(params, itemKey, confidence, "committed", JSON.stringify(extracted));
 
     return { filename: params.filename, itemKey, confidence, status: "committed", writtenCount: written, skippedCount: skipped };
@@ -100,25 +102,31 @@ export async function runSeasonExtraPipelineForImage(params: {
  *  A season-summary screenshot covers everyone who contributed at ANY point in the season,
  *  including members who've since left - unlike a weekly screenshot (taken while everyone shown
  *  is still current), so it's the one place this actually comes up. The game only tags members
- *  CURRENTLY in RUNE with the "[RUNE] " prefix; a departed member's row shows either their bare
- *  name (no tag at all) or a different alliance's tag if they joined elsewhere - hasAllianceTag()
- *  checks for "RUNE" specifically (see matchMemberCore.ts), not just "some bracket," so both
- *  cases are caught. Rows that fail that check are skipped entirely here - not matched, not
- *  auto-created, not written - both because departed members don't collect season rewards anyway
- *  (see the isActive filter in computeSeasonPoints/computeSeasonPositional) and because matching
- *  an untagged name against the roster is more likely to misfire (coincidental fuzzy match, or a
- *  spurious new Member row) than to help. This check is scoped to season extras only - the
- *  regular weekly pipeline (lib/pipeline/run.ts) doesn't need it, since a live weekly screenshot
- *  naturally only shows people who were still tagged members at that moment. */
-async function writeSeasonExtraRows(itemId: number, extracted: RankingListResult): Promise<{ written: number; skipped: number }> {
+ *  CURRENTLY in the alliance with its tag prefix (configured in Setup → General → Alliance code,
+ *  matched case-insensitively since the game doesn't render it consistently cased); a departed
+ *  member's row shows either their bare name (no tag at all) or a different alliance's tag if
+ *  they joined elsewhere - hasAllianceTag() checks for this alliance's tag specifically, not just
+ *  "some bracket," so both cases are caught. Rows that fail that check are skipped entirely here -
+ *  not matched, not auto-created, not written - both because departed members don't collect
+ *  season rewards anyway (see the isActive filter in computeSeasonPoints/computeSeasonPositional)
+ *  and because matching an untagged name against the roster is more likely to misfire
+ *  (coincidental fuzzy match, or a spurious new Member row) than to help. This check is scoped to
+ *  season extras only - the regular weekly pipeline (lib/pipeline/run.ts) doesn't need it, since a
+ *  live weekly screenshot naturally only shows people who were still tagged members at that
+ *  moment. */
+async function writeSeasonExtraRows(
+  itemId: number,
+  extracted: RankingListResult,
+  allianceTag: string
+): Promise<{ written: number; skipped: number }> {
   let written = 0;
   let skipped = 0;
   for (const row of extracted.rows) {
-    if (!hasAllianceTag(row.member_name)) {
+    if (!hasAllianceTag(row.member_name, allianceTag)) {
       skipped++;
       continue;
     }
-    const memberId = await matchMember(row.member_name);
+    const memberId = await matchMember(row.member_name, allianceTag);
     await prisma.seasonExtraValue.upsert({
       where: { itemId_memberId: { itemId, memberId } },
       update: { rawValue: row.value },

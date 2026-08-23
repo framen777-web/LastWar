@@ -2,19 +2,20 @@ const MATCH_THRESHOLD_RATIO = 0.2;
 
 export type MatchableMember = { id: number; name: string; aliases: string };
 
-// This app tracks exactly one alliance - RUNE. Screenshots prefix a CURRENT member's name with
-// "[RUNE] " (whitespace and case can vary slightly, e.g. "[ Rune ]"); anyone else's name is either
-// bare (untagged) or carries a different alliance's tag (they left and joined elsewhere) - either
-// way, not "[RUNE]", so hasAllianceTag() must check for that specific text, not just "some bracket."
-const ALLIANCE_TAG = "RUNE";
-const ALLIANCE_TAG_PATTERN = new RegExp(`^\\s*\\[\\s*${ALLIANCE_TAG}\\s*\\]\\s*`, "i");
+function allianceTagPattern(allianceTag: string): RegExp {
+  const escaped = allianceTag.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*\\[\\s*${escaped}\\s*\\]\\s*`, "i");
+}
 
-/** Whether a raw name is prefixed with the RUNE alliance tag, e.g. "[RUNE] SomeName" - only
- *  CURRENT alliance members get this prefix in-game, so its absence (bare name, or a different
- *  alliance's tag) marks a departed member on a screenshot that otherwise covers historical
- *  contributors (see runSeasonExtra.ts). */
-export function hasAllianceTag(name: string): boolean {
-  return ALLIANCE_TAG_PATTERN.test(name);
+/**
+ * Screenshots show a member's *current* alliance tag prefix, e.g. "[RUNE] SomeName" - the tag
+ * itself is a setting (Setup → General → Alliance code), not hardcoded, and matching is always
+ * case-insensitive since the game's own rendering of the tag isn't consistently cased (e.g.
+ * "RuNE"). A member who left shows either no tag or a different alliance's tag, so "some bracket"
+ * isn't enough - it has to specifically be this alliance's tag.
+ */
+export function hasAllianceTag(name: string, allianceTag: string): boolean {
+  return allianceTagPattern(allianceTag).test(name);
 }
 
 /**
@@ -22,8 +23,8 @@ export function hasAllianceTag(name: string): boolean {
  * "[RUNE] SomeName" - that's the alliance name, not part of the member's
  * name, so it's stripped before matching/storing.
  */
-export function stripAllianceTag(name: string): string {
-  return name.replace(ALLIANCE_TAG_PATTERN, "").trim();
+export function stripAllianceTag(name: string, allianceTag: string = "RUNE"): string {
+  return name.replace(allianceTagPattern(allianceTag), "").trim();
 }
 
 export function normalize(name: string): string {
@@ -48,8 +49,8 @@ function levenshtein(a: string, b: string): number {
  * no writes - returns null when nothing matches closely enough, so callers decide what to
  * do (create a member for real, or just report "no match" in a dry-run preview).
  */
-export function findMemberId(rawName: string, members: MatchableMember[]): number | null {
-  const trimmedName = stripAllianceTag(rawName);
+export function findMemberId(rawName: string, members: MatchableMember[], allianceTag: string = "RUNE"): number | null {
+  const trimmedName = stripAllianceTag(rawName, allianceTag);
   const normalized = normalize(trimmedName);
 
   let best: { id: number; distance: number } | null = null;

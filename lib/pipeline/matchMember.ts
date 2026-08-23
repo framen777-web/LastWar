@@ -6,12 +6,12 @@ import { findMemberId, stripAllianceTag } from "./matchMemberCore";
  * Fuzzy-matches a raw OCR'd member name against the known roster (name + aliases).
  * Creates a new Member row if nothing matches closely enough.
  */
-export async function matchMember(rawName: string): Promise<number> {
+export async function matchMember(rawName: string, allianceTag: string = "RUNE"): Promise<number> {
   const members = await prisma.member.findMany();
-  const matched = findMemberId(rawName, members);
+  const matched = findMemberId(rawName, members, allianceTag);
   if (matched !== null) return matched;
 
-  const name = stripAllianceTag(rawName);
+  const name = stripAllianceTag(rawName, allianceTag);
   try {
     const created = await prisma.member.create({ data: { name, nameConfirmed: false } });
     return created.id;
