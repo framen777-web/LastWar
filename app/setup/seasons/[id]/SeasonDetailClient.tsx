@@ -203,7 +203,13 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
         </div>
       )}
 
-      <BandsSection seasonId={seasonId} bandRows={bandRows} setBandRows={setBandRows} locked={locked} />
+      <BandsSection
+        seasonId={seasonId}
+        bandRows={bandRows}
+        setBandRows={setBandRows}
+        locked={locked}
+        totalBoxes={season.totalBoxes}
+      />
 
       {locked && (
         <p className="text-neutral-500 text-sm">
@@ -698,11 +704,13 @@ function BandsSection({
   bandRows,
   setBandRows,
   locked,
+  totalBoxes,
 }: {
   seasonId: number;
   bandRows: { commanderCount: string; pctOfBoxes: string }[];
   setBandRows: React.Dispatch<React.SetStateAction<{ commanderCount: string; pctOfBoxes: string }[]>>;
   locked: boolean;
+  totalBoxes: number;
 }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -750,34 +758,42 @@ function BandsSection({
           <span className="w-10">Order</span>
           <span className="w-32">Commanders</span>
           <span className="w-32">% of boxes</span>
+          <span className="w-36">Boxes / person (approx.)</span>
         </div>
-        {bandRows.map((b, i) => (
-          <div key={i} className="flex items-center gap-3 text-sm">
-            <span className="w-10 text-neutral-500">{i + 1}</span>
-            <input
-              type="number"
-              min={1}
-              disabled={locked}
-              value={b.commanderCount}
-              onChange={(e) => patch(i, "commanderCount", e.target.value)}
-              className="border border-neutral-300 rounded px-2 py-1 w-24"
-            />
-            <input
-              type="number"
-              min={0}
-              step="any"
-              disabled={locked}
-              value={b.pctOfBoxes}
-              onChange={(e) => patch(i, "pctOfBoxes", e.target.value)}
-              className="border border-neutral-300 rounded px-2 py-1 w-24"
-            />
-            {!locked && (
-              <button onClick={() => removeRow(i)} className="text-red-600 hover:text-red-800 text-xs">
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
+        {bandRows.map((b, i) => {
+          const commanderCount = Number(b.commanderCount) || 0;
+          const pctOfBoxes = Number(b.pctOfBoxes) || 0;
+          const perPerson = commanderCount > 0 ? (totalBoxes * (pctOfBoxes / 100)) / commanderCount : null;
+
+          return (
+            <div key={i} className="flex items-center gap-3 text-sm">
+              <span className="w-10 text-neutral-500">{i + 1}</span>
+              <input
+                type="number"
+                min={1}
+                disabled={locked}
+                value={b.commanderCount}
+                onChange={(e) => patch(i, "commanderCount", e.target.value)}
+                className="border border-neutral-300 rounded px-2 py-1 w-24"
+              />
+              <input
+                type="number"
+                min={0}
+                step="any"
+                disabled={locked}
+                value={b.pctOfBoxes}
+                onChange={(e) => patch(i, "pctOfBoxes", e.target.value)}
+                className="border border-neutral-300 rounded px-2 py-1 w-24"
+              />
+              <span className="w-36 text-neutral-500">{perPerson === null ? "—" : `${perPerson.toFixed(1)} each`}</span>
+              {!locked && (
+                <button onClick={() => removeRow(i)} className="text-red-600 hover:text-red-800 text-xs">
+                  Remove
+                </button>
+              )}
+            </div>
+          );
+        })}
         {bandRows.length === 0 && <p className="text-neutral-400 text-sm">No bands configured yet.</p>}
       </div>
       {!locked && (
@@ -786,10 +802,15 @@ function BandsSection({
         </button>
       )}
       {bandRows.length > 0 && (
-        <p className={`text-xs ${pctOk ? "text-neutral-500" : "text-amber-600"}`}>
-          Bands cover ranks 1–{totalCommanders} ({totalCommanders} commander{totalCommanders === 1 ? "" : "s"}), {totalPct.toFixed(2)}% of
-          boxes allocated{!pctOk && " — doesn't add up to 100%"}
-        </p>
+        <>
+          <p className={`text-xs ${pctOk ? "text-neutral-500" : "text-amber-600"}`}>
+            Bands cover ranks 1–{totalCommanders} ({totalCommanders} commander{totalCommanders === 1 ? "" : "s"}), {totalPct.toFixed(2)}% of
+            boxes allocated{!pctOk && " — doesn't add up to 100%"}
+          </p>
+          <p className="text-neutral-400 text-xs">
+            Approximate — exact whole-box amounts (with rounding carried to the next band) are shown on Season Reports.
+          </p>
+        </>
       )}
       {!locked && (
         <div className="flex items-center gap-3">
