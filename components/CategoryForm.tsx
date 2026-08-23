@@ -21,10 +21,6 @@ export type Category = {
   recordCount: number;
   cumulative: boolean;
   summaryMode: string;
-  conductorMode: string;
-  conductorPointsPerUnit: number | null;
-  conductorUnitSize: number | null;
-  conductorFlatValue: number | null;
 };
 
 type FormState = {
@@ -41,10 +37,6 @@ type FormState = {
   active: boolean;
   cumulative: boolean;
   summaryMode: "sum" | "average" | "max" | "min" | "selected_week";
-  conductorMode: "off" | "rate" | "flat";
-  conductorPointsPerUnit: string;
-  conductorUnitSize: string;
-  conductorFlatValue: string;
 };
 
 const SHAPES = Object.keys(SHAPE_FIELDS);
@@ -71,10 +63,6 @@ function emptyForm(shape: string, name = ""): FormState {
     active: true,
     cumulative: false,
     summaryMode: "selected_week",
-    conductorMode: "off",
-    conductorPointsPerUnit: "",
-    conductorUnitSize: "",
-    conductorFlatValue: "",
   };
 }
 
@@ -95,10 +83,6 @@ function formFromCategory(cat: Category): FormState {
     summaryMode: (["sum", "average", "max", "min", "selected_week"].includes(cat.summaryMode)
       ? cat.summaryMode
       : "selected_week") as FormState["summaryMode"],
-    conductorMode: cat.conductorMode === "rate" || cat.conductorMode === "flat" ? cat.conductorMode : "off",
-    conductorPointsPerUnit: cat.conductorPointsPerUnit !== null ? String(cat.conductorPointsPerUnit) : "",
-    conductorUnitSize: cat.conductorUnitSize !== null ? String(cat.conductorUnitSize) : "",
-    conductorFlatValue: cat.conductorFlatValue !== null ? String(cat.conductorFlatValue) : "",
   };
 }
 
@@ -160,7 +144,6 @@ export function CategoryForm({
     setFormErrors({});
 
     const isFreeText = form.shape === "free_text";
-    const conductorMode = isFreeText && form.conductorMode === "rate" ? "off" : form.conductorMode;
     const payload = {
       name: form.name,
       description: form.description || null,
@@ -174,10 +157,6 @@ export function CategoryForm({
       active: form.active,
       cumulative: isFreeText ? false : form.cumulative,
       summaryMode: isFreeText && !FREE_TEXT_SUMMARIZABLE_KEYS.has(editing?.key ?? "") ? "selected_week" : form.summaryMode,
-      conductorMode,
-      conductorPointsPerUnit: conductorMode === "rate" ? Number(form.conductorPointsPerUnit) || 0 : null,
-      conductorUnitSize: conductorMode === "rate" ? Number(form.conductorUnitSize) || 1 : null,
-      conductorFlatValue: conductorMode === "flat" ? Number(form.conductorFlatValue) || 0 : null,
     };
 
     const url = editing ? `/api/categories/${editing.id}` : "/api/categories";
@@ -421,73 +400,6 @@ export function CategoryForm({
           </p>
         </div>
       )}
-
-      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-        <label className="text-sm font-medium">Conductor points</label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="radio"
-            checked={form.conductorMode === "off"}
-            onChange={() => setForm((f) => ({ ...f, conductorMode: "off" }))}
-          />
-          Not used for Conductor points
-        </label>
-        {form.shape !== "free_text" && (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              checked={form.conductorMode === "rate"}
-              onChange={() => setForm((f) => ({ ...f, conductorMode: "rate" }))}
-            />
-            Rate - points per unit of value
-          </label>
-        )}
-        {form.conductorMode === "rate" && form.shape !== "free_text" && (
-          <div className="pl-6 flex items-center gap-2 text-sm">
-            <input
-              type="number"
-              min={0}
-              step="any"
-              value={form.conductorPointsPerUnit}
-              onChange={(e) => setForm((f) => ({ ...f, conductorPointsPerUnit: e.target.value }))}
-              className="border border-neutral-300 rounded px-3 py-2 w-24"
-              placeholder="e.g. 1"
-            />
-            <span className="text-neutral-500">points per</span>
-            <input
-              type="number"
-              min={0}
-              step="any"
-              value={form.conductorUnitSize}
-              onChange={(e) => setForm((f) => ({ ...f, conductorUnitSize: e.target.value }))}
-              className="border border-neutral-300 rounded px-3 py-2 w-28"
-              placeholder="e.g. 1000"
-            />
-          </div>
-        )}
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="radio"
-            checked={form.conductorMode === "flat"}
-            onChange={() => setForm((f) => ({ ...f, conductorMode: "flat" }))}
-          />
-          Flat - fixed points for submitting any value that week
-        </label>
-        {form.conductorMode === "flat" && (
-          <div className="pl-6 flex items-center gap-2 text-sm">
-            <input
-              type="number"
-              min={0}
-              step="any"
-              value={form.conductorFlatValue}
-              onChange={(e) => setForm((f) => ({ ...f, conductorFlatValue: e.target.value }))}
-              className="border border-neutral-300 rounded px-3 py-2 w-24"
-              placeholder="e.g. 50"
-            />
-            <span className="text-neutral-500">points</span>
-          </div>
-        )}
-      </div>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />

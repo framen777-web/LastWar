@@ -191,6 +191,8 @@ export function ConductorSettingsClient({ categories }: { categories: { key: str
         {saved && <span className="text-green-700 text-sm">Saved</span>}
       </div>
 
+      <ConductorCategoryPointsSection />
+
       <div className="border border-neutral-200 rounded max-w-md p-4 flex flex-col gap-3">
         <div className="font-semibold">Recalculate selection points</div>
         <p className="text-neutral-500 text-xs">
@@ -200,6 +202,161 @@ export function ConductorSettingsClient({ categories }: { categories: { key: str
           values, so it's worth reviewing the summary afterward.
         </p>
         <RecalculateButton />
+      </div>
+    </div>
+  );
+}
+
+type ConductorCategoryRow = {
+  categoryKey: string;
+  name: string;
+  mode: "off" | "rate" | "flat";
+  pointsPerUnit: string;
+  unitSize: string;
+  flatValue: string;
+};
+
+type ConductorCategoryApiRow = {
+  key: string;
+  name: string;
+  conductorMode: string;
+  conductorPointsPerUnit: number | null;
+  conductorUnitSize: number | null;
+  conductorFlatValue: number | null;
+};
+
+function ConductorCategoryPointsSection() {
+  const [rows, setRows] = useState<ConductorCategoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/conductor/category-points")
+      .then((res) => res.json())
+      .then((data) =>
+        setRows(
+          (data.categories ?? []).map((c: ConductorCategoryApiRow) => ({
+            categoryKey: c.key,
+            name: c.name,
+            mode: c.conductorMode === "rate" || c.conductorMode === "flat" ? c.conductorMode : "off",
+            pointsPerUnit: c.conductorPointsPerUnit != null ? String(c.conductorPointsPerUnit) : "",
+            unitSize: c.conductorUnitSize != null ? String(c.conductorUnitSize) : "",
+            flatValue: c.conductorFlatValue != null ? String(c.conductorFlatValue) : "",
+          }))
+        )
+      )
+      .finally(() => setLoading(false));
+  }, []);
+
+  function patch(categoryKey: string, patch: Partial<ConductorCategoryRow>) {
+    setSaved(false);
+    setRows((prev) => prev.map((r) => (r.categoryKey === categoryKey ? { ...r, ...patch } : r)));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    const items = rows.map((r) => ({
+      categoryKey: r.categoryKey,
+      mode: r.mode,
+      pointsPerUnit: r.mode === "rate" ? Number(r.pointsPerUnit) || 0 : null,
+      unitSize: r.mode === "rate" ? Number(r.unitSize) || 1 : null,
+      flatValue: r.mode === "flat" ? Number(r.flatValue) || 0 : null,
+    }));
+    await fetch("/api/conductor/category-points", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    setSaving(false);
+    setSaved(true);
+  }
+
+  return (
+    <div className="border border-neutral-200 rounded p-4 flex flex-col gap-3">
+      <div className="font-semibold">Conductor points by category</div>
+      <p className="text-neutral-500 text-xs">
+        Rate scores (weekly value / unit size) × points per unit; Flat scores a fixed value for any week the
+        member has a value at all; Off doesn&apos;t contribute to Conductor points.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-sm border-collapse">
+          <thead>
+            <tr className="text-left text-xs font-medium text-neutral-500">
+              <th className="py-1 pr-4">Category</th>
+              <th className="py-1 pr-4">Mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.categoryKey} className="border-t border-neutral-100">
+                <td className="py-2 pr-4 font-medium whitespace-nowrap">{row.name}</td>
+                <td className="py-2 pr-4">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={row.mode}
+                      onChange={(e) => patch(row.categoryKey, { mode: e.target.value as ConductorCategoryRow["mode"] })}
+                      className="border border-neutral-300 rounded px-2 py-1"
+                    >
+                      <option value="off">Off</option>
+                      <option value="rate">Rate</option>
+                      <option value="flat">Flat</option>
+                    </select>
+                    {row.mode === "rate" && (
+                      <>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="points"
+                          value={row.pointsPerUnit}
+                          onChange={(e) => patch(row.categoryKey, { pointsPerUnit: e.target.value })}
+                          className="border border-neutral-300 rounded px-2 py-1 w-20"
+                        />
+                        <span className="text-neutral-500">per</span>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="unit size"
+                          value={row.unitSize}
+                          onChange={(e) => patch(row.categoryKey, { unitSize: e.target.value })}
+                          className="border border-neutral-300 rounded px-2 py-1 w-24"
+                        />
+                      </>
+                    )}
+                    {row.mode === "flat" && (
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="points"
+                        value={row.flatValue}
+                        onChange={(e) => patch(row.categoryKey, { flatValue: e.target.value })}
+                        className="border border-neutral-300 rounded px-2 py-1 w-20"
+                      />
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!loading && rows.length === 0 && (
+              <tr>
+                <td colSpan={2} className="py-2 text-neutral-400">
+                  No active categories.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {saved && <span className="text-green-700 text-sm">Saved</span>}
       </div>
     </div>
   );
