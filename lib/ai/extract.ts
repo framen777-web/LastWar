@@ -7,6 +7,7 @@ export type RankingRow = {
   member_name: string;
   value: number;
   alliance_rank?: string;
+  alliance_tag?: string;
 };
 
 export type RankingListResult = { event_date?: string; rows: RankingRow[] };

@@ -5,13 +5,19 @@ import { findMemberId, stripAllianceTag } from "./matchMemberCore";
 /**
  * Fuzzy-matches a raw OCR'd member name against the known roster (name + aliases).
  * Creates a new Member row if nothing matches closely enough.
+ *
+ * `allianceTag` is accepted but unused here - name matching itself never needed it (findMemberId/
+ * stripAllianceTag just clean up whatever raw name string arrives). It's kept as a parameter only
+ * so callers that decide "is this row a current member at all" *before* calling matchMember (see
+ * runSeasonExtra.ts's hasAllianceTag check against the AI's separately-reported alliance_tag
+ * field) can keep passing it through without every call site needing to change shape.
  */
 export async function matchMember(rawName: string, allianceTag: string = "RUNE"): Promise<number> {
   const members = await prisma.member.findMany();
-  const matched = findMemberId(rawName, members, allianceTag);
+  const matched = findMemberId(rawName, members);
   if (matched !== null) return matched;
 
-  const name = stripAllianceTag(rawName, allianceTag);
+  const name = stripAllianceTag(rawName);
   try {
     const created = await prisma.member.create({ data: { name, nameConfirmed: false } });
     return created.id;

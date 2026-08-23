@@ -101,19 +101,19 @@ export async function runSeasonExtraPipelineForImage(params: {
  *
  *  A season-summary screenshot covers everyone who contributed at ANY point in the season,
  *  including members who've since left - unlike a weekly screenshot (taken while everyone shown
- *  is still current), so it's the one place this actually comes up. The game only tags members
- *  CURRENTLY in the alliance with its tag prefix (configured in Setup → General → Alliance code,
- *  matched case-insensitively since the game doesn't render it consistently cased); a departed
- *  member's row shows either their bare name (no tag at all) or a different alliance's tag if
- *  they joined elsewhere - hasAllianceTag() checks for this alliance's tag specifically, not just
- *  "some bracket," so both cases are caught. Rows that fail that check are skipped entirely here -
- *  not matched, not auto-created, not written - both because departed members don't collect
- *  season rewards anyway (see the isActive filter in computeSeasonPoints/computeSeasonPositional)
- *  and because matching an untagged name against the roster is more likely to misfire
- *  (coincidental fuzzy match, or a spurious new Member row) than to help. This check is scoped to
- *  season extras only - the regular weekly pipeline (lib/pipeline/run.ts) doesn't need it, since a
- *  live weekly screenshot naturally only shows people who were still tagged members at that
- *  moment. */
+ *  is still current), so it's the one place this actually comes up. The extraction schema reports
+ *  each row's bracketed tag separately as alliance_tag (see lib/ai/prompts.ts) rather than only
+ *  stripping it out of member_name - a departed member's row has either no alliance_tag at all, or
+ *  a different alliance's tag if they joined elsewhere, and hasAllianceTag() compares that
+ *  reported field against the configured alliance tag (Setup → General → Alliance code, matched
+ *  case-insensitively since the game doesn't render it consistently cased) - so both departure
+ *  cases are caught. Rows that fail that check are skipped entirely here - not matched, not
+ *  auto-created, not written - both because departed members don't collect season rewards anyway
+ *  (see the isActive filter in computeSeasonPoints/computeSeasonPositional) and because matching
+ *  an untagged name against the roster is more likely to misfire (coincidental fuzzy match, or a
+ *  spurious new Member row) than to help. This check is scoped to season extras only - the
+ *  regular weekly pipeline (lib/pipeline/run.ts) doesn't need it, since a live weekly screenshot
+ *  naturally only shows people who were still tagged members at that moment. */
 async function writeSeasonExtraRows(
   itemId: number,
   extracted: RankingListResult,
@@ -122,7 +122,7 @@ async function writeSeasonExtraRows(
   let written = 0;
   let skipped = 0;
   for (const row of extracted.rows) {
-    if (!hasAllianceTag(row.member_name, allianceTag)) {
+    if (!hasAllianceTag(row.alliance_tag, allianceTag)) {
       skipped++;
       continue;
     }

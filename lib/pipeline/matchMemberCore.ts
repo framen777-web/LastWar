@@ -2,29 +2,28 @@ const MATCH_THRESHOLD_RATIO = 0.2;
 
 export type MatchableMember = { id: number; name: string; aliases: string };
 
-function allianceTagPattern(allianceTag: string): RegExp {
-  const escaped = allianceTag.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^\\s*\\[\\s*${escaped}\\s*\\]\\s*`, "i");
-}
-
 /**
- * Screenshots show a member's *current* alliance tag prefix, e.g. "[RUNE] SomeName" - the tag
- * itself is a setting (Setup → General → Alliance code), not hardcoded, and matching is always
- * case-insensitive since the game's own rendering of the tag isn't consistently cased (e.g.
- * "RuNE"). A member who left shows either no tag or a different alliance's tag, so "some bracket"
- * isn't enough - it has to specifically be this alliance's tag.
+ * The AI extraction reports a row's alliance tag as its own field (alliance_tag), separate from
+ * the already-cleaned member_name - see lib/ai/prompts.ts. This just compares that reported tag
+ * against the configured alliance tag (Setup → General → Alliance code), case-insensitively since
+ * the game doesn't render it consistently cased (e.g. "RuNE"). A departed member's row has either
+ * no alliance_tag at all, or a different alliance's tag - both compare unequal here.
  */
-export function hasAllianceTag(name: string, allianceTag: string): boolean {
-  return allianceTagPattern(allianceTag).test(name);
+export function hasAllianceTag(extractedTag: string | null | undefined, allianceTag: string): boolean {
+  if (!extractedTag) return false;
+  return extractedTag.trim().toLowerCase() === allianceTag.trim().toLowerCase();
 }
 
 /**
  * Screenshots show member names prefixed with the alliance tag, e.g.
  * "[RUNE] SomeName" - that's the alliance name, not part of the member's
- * name, so it's stripped before matching/storing.
+ * name, so it's stripped before matching/storing. Kept as a simple generic-bracket strip (not
+ * tied to the configured allianceTag) since the AI extraction already excludes the tag from
+ * member_name itself (see buildExtractionPrompt) - this is just a harmless safety net for
+ * whatever a raw/unprocessed name string still happens to carry.
  */
-export function stripAllianceTag(name: string, allianceTag: string = "RUNE"): string {
-  return name.replace(allianceTagPattern(allianceTag), "").trim();
+export function stripAllianceTag(name: string): string {
+  return name.replace(/^\s*\[[^\]]*\]\s*/, "").trim();
 }
 
 export function normalize(name: string): string {
@@ -49,8 +48,8 @@ function levenshtein(a: string, b: string): number {
  * no writes - returns null when nothing matches closely enough, so callers decide what to
  * do (create a member for real, or just report "no match" in a dry-run preview).
  */
-export function findMemberId(rawName: string, members: MatchableMember[], allianceTag: string = "RUNE"): number | null {
-  const trimmedName = stripAllianceTag(rawName, allianceTag);
+export function findMemberId(rawName: string, members: MatchableMember[]): number | null {
+  const trimmedName = stripAllianceTag(rawName);
   const normalized = normalize(trimmedName);
 
   let best: { id: number; distance: number } | null = null;

@@ -88,6 +88,13 @@ const RANKING_LIST_SCHEMA = {
             description:
               "The R1-R5 alliance role badge next to the member's name, if visible. Omit or null if not visible.",
           },
+          alliance_tag: {
+            type: "string",
+            description:
+              "The bracketed alliance tag shown before this member's name, if any - e.g. 'RUNE' from " +
+              "'[RUNE] SomeName' (just the tag text, no brackets). Omit or null if the name had no " +
+              "bracket prefix at all.",
+          },
         },
         required: ["rank", "member_name", "value"],
       },
@@ -173,7 +180,7 @@ Report every numeric value the member gave, in "values", in the exact order they
 
   return `${intro}
 
-Extract every visible row/member exactly as shown. Read member names carefully (they may contain unusual characters/emoji — transcribe as best you can). Do not invent rows that aren't visible. If the "alliance_rank" (R1-R5) badge isn't visible for a member, omit that field for them rather than guessing. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — that bracketed tag is the alliance name, not part of the member's name; exclude it from "member_name"/"name" and report only the person's actual display name.
+Extract every visible row/member exactly as shown. Read member names carefully (they may contain unusual characters/emoji — transcribe as best you can). Do not invent rows that aren't visible. If the "alliance_rank" (R1-R5) badge isn't visible for a member, omit that field for them rather than guessing. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — that bracketed tag is the alliance name, not part of the member's name; exclude it from "member_name"/"name" and report only the person's actual display name. Separately, also report that tag's text (without brackets) in "alliance_tag" if one was shown - e.g. "RUNE" - so a downstream check can tell who currently carries it. Omit "alliance_tag" entirely if the name had no bracket prefix.
 
 Numeric values are often abbreviated with a magnitude suffix — K (thousand), M (million), B (billion), G (also billion in some locales) — e.g. "89.5M" or "1.2B". Always expand these to the full number before reporting: "89.5M" = 89500000, "1.2B" = 1200000000. Never report just the leading digits without applying the suffix's multiplier.`;
 }
