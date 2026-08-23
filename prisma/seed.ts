@@ -145,6 +145,13 @@ const MENU_ITEMS = [
     parentKey: "home-conductor",
   },
   { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
+  {
+    key: "home-season-reports",
+    label: "Season Reports",
+    href: "/reports/season",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: null,
+  },
   { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"], parentKey: null },
 
   { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"], parentKey: "home-uploads" },
@@ -242,13 +249,6 @@ const MENU_ITEMS = [
   },
   { key: "reports-mvp", label: "MVP Report", href: "/reports/mvp", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
   { key: "reports-r1", label: "R1 Report", href: "/reports/r1", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
-  {
-    key: "reports-season",
-    label: "Season Report",
-    href: "/reports/season",
-    roles: ["ADMIN", "LEADER"],
-    parentKey: "home-end-of-week-reports",
-  },
 
   { key: "settings-general", label: "General", href: "/settings", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },

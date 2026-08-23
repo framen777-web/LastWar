@@ -173,7 +173,15 @@ export function SeasonDetailClient({ seasonId }: { seasonId: number }) {
 
       <BandsSection seasonId={seasonId} bandRows={bandRows} setBandRows={setBandRows} locked={locked} />
 
-      <FinalizeSection seasonId={seasonId} locked={locked} finalizedAt={season.finalizedAt} onChanged={load} />
+      {locked && (
+        <p className="text-neutral-500 text-sm">
+          This season is finalized, so its config is locked here.{" "}
+          <Link href="/reports/season" className="text-accent hover:underline">
+            Reopen it from Season Reports
+          </Link>{" "}
+          to edit again.
+        </p>
+      )}
     </div>
   );
 }
@@ -624,86 +632,3 @@ function BandsSection({
   );
 }
 
-function FinalizeSection({
-  seasonId,
-  locked,
-  finalizedAt,
-  onChanged,
-}: {
-  seasonId: number;
-  locked: boolean;
-  finalizedAt: string | null;
-  onChanged: () => void;
-}) {
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleFinalize() {
-    if (
-      !confirm(
-        "This locks scoring config and freezes the current results as the official reward list. You can reopen it later if needed."
-      )
-    )
-      return;
-    setRunning(true);
-    setError(null);
-    const res = await fetch(`/api/seasons/${seasonId}/finalize`, { method: "POST" });
-    const data = await res.json();
-    setRunning(false);
-    if (!res.ok) {
-      setError(data.error ?? "Finalize failed.");
-      return;
-    }
-    onChanged();
-  }
-
-  async function handleReopen() {
-    if (!confirm("This deletes the frozen results - the report will show live numbers again until you re-finalize.")) return;
-    setRunning(true);
-    setError(null);
-    const res = await fetch(`/api/seasons/${seasonId}/reopen`, { method: "POST" });
-    const data = await res.json();
-    setRunning(false);
-    if (!res.ok) {
-      setError(data.error ?? "Reopen failed.");
-      return;
-    }
-    onChanged();
-  }
-
-  return (
-    <div className="border border-neutral-200 rounded p-4 flex flex-col gap-3">
-      <h2 className="font-semibold">{locked ? "Finalized" : "Finalize"}</h2>
-      {locked ? (
-        <>
-          <p className="text-neutral-500 text-sm">
-            Finalized{finalizedAt ? ` on ${new Date(finalizedAt).toLocaleString()}` : ""}. The Season Report now reads the frozen result
-            rows instead of live data.
-          </p>
-          <button
-            onClick={handleReopen}
-            disabled={running}
-            className="border border-neutral-300 rounded px-4 py-2 text-sm disabled:opacity-50 self-start"
-          >
-            {running ? "Reopening…" : "Reopen for editing"}
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="text-neutral-500 text-sm">
-            Freezes the current live computation as this season&apos;s official reward list. Scoring config and bands are
-            locked from further edits until reopened.
-          </p>
-          <button
-            onClick={handleFinalize}
-            disabled={running}
-            className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50 self-start"
-          >
-            {running ? "Finalizing…" : "Finalize season"}
-          </button>
-        </>
-      )}
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </div>
-  );
-}

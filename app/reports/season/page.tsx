@@ -5,9 +5,10 @@ import { DataTable, type DataTableColumn, type DataTableRow } from "@/components
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { getSeasonReportData } from "@/lib/season/report";
+import { SeasonFinalizeControls } from "./SeasonFinalizeControls";
 
 export default async function SeasonReportPage({ searchParams }: PageProps<"/reports/season">) {
-  await requireMenuAccess("reports-season");
+  const user = await requireMenuAccess("home-season-reports");
   const params = await searchParams;
 
   const seasons = await prisma.season.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, name: true, weekStart: true, weekEnd: true } });
@@ -125,6 +126,10 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/rep
           <p className="text-amber-600 text-sm">{data.unallocatedBoxes} box(es) unallocated after banding — distribute manually.</p>
         )}
       </ZoomProvider>
+
+      {user.role === "ADMIN" && (
+        <SeasonFinalizeControls seasonId={data.season.id} status={data.season.status} finalizedAt={data.season.finalizedAt} />
+      )}
     </div>
   );
 }

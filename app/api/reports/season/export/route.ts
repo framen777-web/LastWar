@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth/dal";
 import { getSeasonReportData } from "@/lib/season/report";
 
 export async function GET(request: Request) {
-  await requireRole(["ADMIN", "LEADER"]);
+  await requireRole(["ADMIN", "LEADER", "MEMBER"]);
 
   const { searchParams } = new URL(request.url);
   const seasonId = Number(searchParams.get("seasonId"));
