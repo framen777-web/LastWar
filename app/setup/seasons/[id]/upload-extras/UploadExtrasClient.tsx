@@ -1,204 +1,151 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { parseCsv } from "@/lib/importCsv/parseCsv";
+import { useNavigationBlocker } from "@/components/NavigationBlocker";
 
-type Step = "upload" | "map" | "preview" | "done";
+const LEAVE_WARNING =
+  "An upload is still processing. Leaving won't stop it - files already queued keep uploading in the background - but you'll lose the progress and results view. Leave anyway?";
 
-type ExtraItem = { id: number; key: string; name: string };
+type SeasonExtraItem = { key: string; name: string };
 
-type ColumnTarget = { kind: "ignore" } | { kind: "member" } | { kind: "item"; itemKey: string };
-
-type PreviewResult = {
-  totalRows: number;
-  matchedMembers: { raw: string; matchedName: string }[];
-  newMembers: string[];
-  allMembers: { id: number; name: string }[];
-  sampleRows: { memberName: string; values: Record<string, number> }[];
+type PipelineResult = {
+  filename: string;
+  itemKey: string;
+  confidence: number;
+  status: "committed" | "needs_review" | "error";
+  message?: string;
 };
 
-const CREATE_NEW = "__new__";
+const STATUS_STYLES: Record<PipelineResult["status"], string> = {
+  committed: "bg-green-100 text-green-800",
+  needs_review: "bg-amber-100 text-amber-800",
+  error: "bg-red-100 text-red-800",
+};
 
-type CommitResult = { rowsProcessed: number; valuesWritten: number; newMembersCreated: string[] };
+const STATUS_LABELS: Record<PipelineResult["status"], string> = {
+  committed: "committed",
+  needs_review: "needs review — re-upload and pick the item manually",
+  error: "error",
+};
 
-function normalizeHeader(h: string): string {
-  return h.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+const AUTO_DETECT = "";
 
-function guessItemForHeader(header: string, items: ExtraItem[]): ExtraItem | null {
-  const normalized = normalizeHeader(header);
-  return items.find((i) => normalizeHeader(i.name) === normalized || normalizeHeader(i.key) === normalized) ?? null;
-}
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
-  const [step, setStep] = useState<Step>("upload");
-  const [fileName, setFileName] = useState("");
-  const [csvText, setCsvText] = useState("");
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rowCount, setRowCount] = useState(0);
-
-  const [items, setItems] = useState<ExtraItem[]>([]);
-  const [targets, setTargets] = useState<Record<string, ColumnTarget>>({});
-  const [newItemForColumn, setNewItemForColumn] = useState<string | null>(null);
-  const [newItemName, setNewItemName] = useState("");
-  const [creatingItem, setCreatingItem] = useState(false);
-
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [resolutions, setResolutions] = useState<Record<string, number | null>>({});
-  const [committing, setCommitting] = useState(false);
-  const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
+  const [items, setItems] = useState<SeasonExtraItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [selectedItemKey, setSelectedItemKey] = useState(AUTO_DETECT);
+  const [files, setFiles] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [results, setResults] = useState<PipelineResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const { setBlock } = useNavigationBlocker();
 
-  async function loadItems(): Promise<ExtraItem[]> {
-    const res = await fetch(`/api/seasons/${seasonId}`);
-    const data = await res.json();
-    const loaded: ExtraItem[] = data.extraItems ?? [];
-    setItems(loaded);
-    return loaded;
+  useEffect(() => {
+    fetch(`/api/seasons/${seasonId}`)
+      .then((res) => res.json())
+      .then((data) => setItems(data.extraItems ?? []))
+      .finally(() => setItemsLoading(false));
+  }, [seasonId]);
+
+  // Covers an actual tab close/refresh/typed URL - in-app navigation (NavHeader's Back/Home)
+  // goes through useNavigationBlocker instead, since beforeunload doesn't fire for Next.js
+  // client-side route changes.
+  useEffect(() => {
+    if (!submitting) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [submitting]);
+
+  function handleCancel() {
+    abortControllerRef.current?.abort();
   }
 
-  async function handleFile(file: File) {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (files.length === 0) return;
+
+    setSubmitting(true);
     setError(null);
-    const text = await file.text();
-    const { headers: parsedHeaders, rows } = parseCsv(text);
-    if (parsedHeaders.length === 0) {
-      setError("Couldn't read any columns from that file.");
-      return;
-    }
-    setFileName(file.name);
-    setCsvText(text);
-    setHeaders(parsedHeaders);
-    setRowCount(rows.length);
+    setResults(null);
+    setBlock(true, LEAVE_WARNING);
 
-    const loadedItems = await loadItems();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    const initialTargets: Record<string, ColumnTarget> = {};
-    for (const header of parsedHeaders) {
-      const lower = header.toLowerCase();
-      if (lower.includes("member") || lower.includes("name") || lower.includes("commander")) {
-        initialTargets[header] = { kind: "member" };
-        continue;
-      }
-      const guessedItem = guessItemForHeader(header, loadedItems);
-      if (guessedItem) {
-        initialTargets[header] = { kind: "item", itemKey: guessedItem.key };
-        continue;
-      }
-      initialTargets[header] = { kind: "ignore" };
-    }
-    setTargets(initialTargets);
-    setStep("map");
-  }
+    // Processed one file per request (not one batch request) so the button can show real
+    // "file X of N" progress instead of a single opaque "Processing…" for the whole upload -
+    // same convention as app/upload/UploadClient.tsx.
+    const collected: PipelineResult[] = [];
+    const failed: { filename: string; reason: string }[] = [];
+    let completed = 0;
+    let cancelled = false;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (controller.signal.aborted) {
+          cancelled = true;
+          break;
+        }
+        setProgress({ current: i + 1, total: files.length });
+        const file = files[i];
 
-  function setTarget(header: string, target: ColumnTarget) {
-    setTargets((prev) => {
-      const next = { ...prev };
-      if (target.kind === "member") {
-        for (const h of Object.keys(next)) {
-          if (next[h]?.kind === "member") next[h] = { kind: "ignore" };
+        try {
+          const formData = new FormData();
+          if (selectedItemKey !== AUTO_DETECT) formData.set("itemKey", selectedItemKey);
+          formData.append("files", file);
+
+          const res = await fetch(`/api/seasons/${seasonId}/upload-extras`, { method: "POST", body: formData, signal: controller.signal });
+          const data = await res.json();
+
+          if (!res.ok) {
+            failed.push({ filename: file.name, reason: data.error ?? `HTTP ${res.status}` });
+            continue;
+          }
+          collected.push(...data.results);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") {
+            cancelled = true;
+            break;
+          }
+          failed.push({ filename: file.name, reason: err instanceof Error ? err.message : String(err) });
+        } finally {
+          completed++;
         }
       }
-      next[header] = target;
-      return next;
-    });
-  }
+      setResults(collected.length > 0 ? collected : null);
 
-  function handleTargetSelect(header: string, value: string) {
-    if (value === CREATE_NEW) {
-      setNewItemForColumn(header);
-      setNewItemName("");
-      return;
+      const messages: string[] = [];
+      if (cancelled) {
+        messages.push(`Cancelled - ${completed} of ${files.length} file(s) were attempted before stopping.`);
+      }
+      if (failed.length > 0) {
+        messages.push(`${failed.length} of ${files.length} file(s) failed:\n${failed.map((f) => `${f.filename}: ${f.reason}`).join("\n")}`);
+      }
+      if (messages.length > 0) setError(messages.join("\n\n"));
+    } finally {
+      setSubmitting(false);
+      setProgress(null);
+      setBlock(false);
+      abortControllerRef.current = null;
     }
-    if (value === "ignore") return setTarget(header, { kind: "ignore" });
-    if (value === "member") return setTarget(header, { kind: "member" });
-    if (value.startsWith("item:")) return setTarget(header, { kind: "item", itemKey: value.slice("item:".length) });
   }
 
-  function selectValueForTarget(target: ColumnTarget | undefined): string {
-    if (!target) return "ignore";
-    if (target.kind === "item") return `item:${target.itemKey}`;
-    return target.kind;
-  }
-
-  async function handleCreateItem() {
-    if (!newItemName.trim() || !newItemForColumn) return;
-    setCreatingItem(true);
-    const res = await fetch(`/api/seasons/${seasonId}/extra-items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newItemName.trim() }),
-    });
-    const data = await res.json();
-    setCreatingItem(false);
-    if (!res.ok) {
-      setError(data.error ?? "Couldn't create item.");
-      return;
-    }
-    setItems((prev) => [...prev, data.item]);
-    setTarget(newItemForColumn, { kind: "item", itemKey: data.item.key });
-    setNewItemForColumn(null);
-    setNewItemName("");
-  }
-
-  const memberColumn = Object.entries(targets).find(([, t]) => t.kind === "member")?.[0] ?? "";
-  const itemColumns: Record<string, string> = Object.fromEntries(
-    Object.entries(targets).filter(([, t]) => t.kind === "item").map(([header, t]) => [header, (t as { kind: "item"; itemKey: string }).itemKey])
-  );
-  const readyForPreview = memberColumn !== "" && Object.keys(itemColumns).length > 0;
-
-  async function handlePreview() {
-    setError(null);
-    setPreviewing(true);
-    setPreview(null);
-    const res = await fetch(`/api/seasons/${seasonId}/upload-extras/preview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csvText, mapping: { memberColumn, itemColumns } }),
-    });
-    const data = await res.json();
-    setPreviewing(false);
-    if (!res.ok) {
-      setError(data.error ?? "Preview failed.");
-      return;
-    }
-    setPreview(data);
-    setResolutions({});
-    setStep("preview");
-  }
-
-  async function handleCommit() {
-    setError(null);
-    setCommitting(true);
-    const res = await fetch(`/api/seasons/${seasonId}/upload-extras/commit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csvText, mapping: { memberColumn, itemColumns }, resolutions }),
-    });
-    const data = await res.json();
-    setCommitting(false);
-    if (!res.ok) {
-      setError(data.error ?? "Import failed.");
-      return;
-    }
-    setCommitResult(data);
-    setStep("done");
-  }
-
-  function startOver() {
-    setStep("upload");
-    setFileName("");
-    setCsvText("");
-    setHeaders([]);
-    setTargets({});
-    setPreview(null);
-    setCommitResult(null);
-    setError(null);
+  function itemName(key: string): string {
+    if (key === "unknown") return "unknown";
+    return items.find((i) => i.key === key)?.name ?? key;
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <div>
         <Link href={`/setup/seasons/${seasonId}`} className="text-xs text-accent hover:underline">
           ← Season
@@ -206,234 +153,108 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
         <h1 className="text-xl font-semibold">Upload extras</h1>
       </div>
       <p className="text-neutral-500 text-sm">
-        Upload a one-time per-commander total for this season&apos;s specific items - map each column to an item,
-        preview, then commit. Re-uploading overwrites any existing value in place.
+        Upload a screenshot of one season item&apos;s leaderboard (e.g. CrystalGold) - same as any other
+        weekly screenshot upload. Auto-detect figures out which configured item it is; re-uploading a
+        corrected screenshot, or a later page of a paginated leaderboard, overwrites only the members
+        it shows.
       </p>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="itemKey" className="text-sm font-medium">
+            Item
+          </label>
+          <select
+            id="itemKey"
+            value={selectedItemKey}
+            disabled={itemsLoading}
+            onChange={(e) => setSelectedItemKey(e.target.value)}
+            className="border border-neutral-300 rounded px-3 py-2 w-64"
+          >
+            <option value={AUTO_DETECT}>Auto-detect</option>
+            {items.map((i) => (
+              <option key={i.key} value={i.key}>
+                {i.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-neutral-400 text-xs">
+            Leave on Auto-detect unless there&apos;s only one item this season, or a prior upload picked the
+            wrong one.
+          </p>
+        </div>
 
-      {step === "upload" && (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium">CSV file</label>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="files" className="text-sm font-medium">
+            Screenshots
+          </label>
           <input
+            id="files"
             type="file"
-            accept=".csv,text/csv"
+            accept="image/*"
+            multiple
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
+              const selected = Array.from(e.target.files ?? []);
+              const valid: File[] = [];
+              const rejections: string[] = [];
+
+              for (const file of selected) {
+                if (file.size > MAX_FILE_SIZE) {
+                  rejections.push(`${file.name}: ${Math.round(file.size / 1024 / 1024)}MB exceeds the 10MB limit`);
+                } else if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+                  rejections.push(`${file.name}: unsupported type "${file.type || "unknown"}" (use JPEG, PNG, or WebP)`);
+                } else {
+                  valid.push(file);
+                }
+              }
+
+              setFiles(valid);
+              setResults(null);
+              setError(rejections.length > 0 ? rejections.join("\n") : null);
             }}
             className="border border-neutral-300 rounded px-3 py-2"
           />
+          {files.length > 0 && <p className="text-sm text-neutral-500">{files.length} file(s) selected</p>}
         </div>
-      )}
 
-      {step === "map" && (
-        <div className="flex flex-col gap-4">
-          <p className="text-neutral-500 text-sm">
-            {fileName} · {rowCount} rows · {headers.length} columns
-          </p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-neutral-300 text-left">
-                  <th className="py-2 pr-3">CSV column</th>
-                  <th className="py-2 pr-3">Maps to</th>
-                </tr>
-              </thead>
-              <tbody>
-                {headers.map((header) => (
-                  <tr key={header} className="border-b border-neutral-100">
-                    <td className="py-1.5 pr-3 font-medium whitespace-nowrap">{header}</td>
-                    <td className="py-1.5 pr-3">
-                      <select
-                        value={selectValueForTarget(targets[header])}
-                        onChange={(e) => handleTargetSelect(header, e.target.value)}
-                        className="border border-neutral-300 rounded px-2 py-1"
-                      >
-                        <option value="ignore">— ignore —</option>
-                        <option value="member">Member name</option>
-                        <optgroup label="Items">
-                          {items.map((i) => (
-                            <option key={i.key} value={`item:${i.key}`}>
-                              {i.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <option value={CREATE_NEW}>+ New item…</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {!readyForPreview && (
-            <p className="text-amber-600 text-sm">Map a Member name column and at least one item column to continue.</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={submitting || files.length === 0}
+            className="self-start bg-accent text-accent-contrast rounded px-4 py-2 disabled:opacity-50"
+          >
+            {submitting ? "Processing…" : "Upload & process"}
+          </button>
+          {submitting && (
+            <button type="button" onClick={handleCancel} className="border border-neutral-300 rounded px-4 py-2 hover:bg-neutral-50">
+              Cancel
+            </button>
           )}
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePreview}
-              disabled={!readyForPreview || previewing}
-              className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
-            >
-              {previewing ? "Checking…" : "Preview"}
-            </button>
-            <button onClick={startOver} className="border border-neutral-300 rounded px-4 py-2 text-sm">
-              Start over
-            </button>
-          </div>
-
-          {newItemForColumn && (
-            <div className="fixed inset-0 z-20 flex justify-end bg-black/20">
-              <div className="w-full max-w-sm bg-surface-raised h-full overflow-y-auto p-6 flex flex-col gap-4 shadow-xl">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">New item</h2>
-                  <button onClick={() => setNewItemForColumn(null)} className="text-neutral-500 hover:text-neutral-900">
-                    Close
-                  </button>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium">Name</label>
-                  <input
-                    type="text"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    className="border border-neutral-300 rounded px-3 py-2"
-                    placeholder="e.g. CrystalGold"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCreateItem}
-                    disabled={creatingItem || !newItemName.trim()}
-                    className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
-                  >
-                    {creatingItem ? "Creating…" : "Create"}
-                  </button>
-                  <button onClick={() => setNewItemForColumn(null)} className="border border-neutral-300 rounded px-4 py-2 text-sm">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
+          {progress && (
+            <span className="text-sm text-neutral-500">
+              Busy with file {progress.current} of {progress.total}
+            </span>
           )}
         </div>
-      )}
+      </form>
 
-      {step === "preview" && preview && (
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="border border-neutral-200 rounded p-3">
-              <div className="text-neutral-500 text-xs">Rows</div>
-              <div className="text-lg font-semibold">{preview.totalRows}</div>
-            </div>
-            <div className="border border-neutral-200 rounded p-3">
-              <div className="text-neutral-500 text-xs">Matched members</div>
-              <div className="text-lg font-semibold">{preview.matchedMembers.length}</div>
-            </div>
-            <div className="border border-neutral-200 rounded p-3">
-              <div className="text-neutral-500 text-xs">New members</div>
-              <div className="text-lg font-semibold">{preview.newMembers.length}</div>
-            </div>
-          </div>
+      {error && <p className="text-red-600 text-sm whitespace-pre-line">{error}</p>}
 
-          {preview.newMembers.length > 0 && (
-            <div className="border border-amber-200 bg-amber-50 rounded p-3 text-sm flex flex-col gap-2">
-              <p className="font-medium text-amber-800">
-                These names didn&apos;t match anyone - create as new, or pick who they renamed from (this upload only
-                runs for commanders already tracked weekly, so a &quot;new&quot; name here is usually a typo, not
-                genuinely new):
-              </p>
-              {preview.newMembers.map((name) => (
-                <div key={name} className="flex items-center gap-2">
-                  <span className="text-amber-800 w-40 truncate" title={name}>
-                    {name}
-                  </span>
-                  <select
-                    value={resolutions[name] ?? CREATE_NEW}
-                    onChange={(e) =>
-                      setResolutions((r) => ({ ...r, [name]: e.target.value === CREATE_NEW ? null : Number(e.target.value) }))
-                    }
-                    className="border border-neutral-300 rounded px-2 py-1 text-xs"
-                  >
-                    <option value={CREATE_NEW}>Create as new member</option>
-                    <optgroup label="Rename of existing member…">
-                      {preview.allMembers.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <p className="text-sm font-medium mb-1">Sample of mapped rows</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-300 text-left">
-                    <th className="py-1 pr-3">Member</th>
-                    {Object.values(itemColumns).map((key) => (
-                      <th key={key} className="py-1 pr-3">
-                        {items.find((i) => i.key === key)?.name ?? key}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.sampleRows.map((r, i) => (
-                    <tr key={i} className="border-b border-neutral-100">
-                      <td className="py-1 pr-3 whitespace-nowrap">{r.memberName}</td>
-                      {Object.values(itemColumns).map((key) => (
-                        <td key={key} className="py-1 pr-3">
-                          {r.values[key] !== undefined ? r.values[key].toLocaleString() : "—"}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleCommit}
-              disabled={committing}
-              className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
-            >
-              {committing ? "Importing…" : `Commit upload (${preview.totalRows} rows)`}
-            </button>
-            <button onClick={() => setStep("map")} className="border border-neutral-300 rounded px-4 py-2 text-sm">
-              Back to mapping
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === "done" && commitResult && (
-        <div className="flex flex-col gap-3">
-          <p className="text-green-700 text-sm font-medium">Upload complete.</p>
-          <ul className="text-sm text-neutral-700 list-disc pl-5 flex flex-col gap-1">
-            <li>{commitResult.rowsProcessed} rows processed</li>
-            <li>{commitResult.valuesWritten} value(s) written</li>
-            {commitResult.newMembersCreated.length > 0 && <li>New members created: {commitResult.newMembersCreated.join(", ")}</li>}
+      {results && (
+        <div className="flex flex-col gap-2">
+          <h2 className="font-medium">Results</h2>
+          <ul className="flex flex-col gap-2">
+            {results.map((r, i) => (
+              <li key={i} className="border border-neutral-200 rounded px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate flex-1">{r.filename}</span>
+                <span className="text-neutral-500">{itemName(r.itemKey)}</span>
+                <span className="text-neutral-500">{Math.round(r.confidence * 100)}%</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${STATUS_STYLES[r.status]}`}>
+                  {STATUS_LABELS[r.status]}
+                </span>
+              </li>
+            ))}
           </ul>
-          <div className="flex gap-2">
-            <button onClick={startOver} className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm self-start">
-              Upload another file
-            </button>
-            <Link href={`/setup/seasons/${seasonId}`} className="border border-neutral-300 rounded px-4 py-2 text-sm self-start">
-              Back to season
-            </Link>
-          </div>
         </div>
       )}
     </div>

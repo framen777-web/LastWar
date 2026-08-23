@@ -261,6 +261,7 @@ model Season {
   extraItems      SeasonExtraItem[]
   bands           SeasonBand[]
   results         SeasonResult[]
+  rawExtractions  RawSeasonExtraction[]
 }
 
 // Points-mode config for one existing Category's contribution to one season's score. Mirrors
@@ -338,6 +339,25 @@ model SeasonExtraValue {
   updatedAt DateTime        @updatedAt
 
   @@unique([itemId, memberId])
+}
+
+// Mirrors RawExtraction, but for season-item screenshots, which have a seasonId instead of a
+// weekNumber and write into SeasonExtraValue instead of CategoryRecord/WeeklyStat. Kept as its
+// own table rather than adding a nullable seasonId/making weekNumber nullable on RawExtraction -
+// the two have different write targets and reusing one table for both would mean every reader of
+// RawExtraction now has to branch on "is this a week one or a season one," for no real benefit.
+model RawSeasonExtraction {
+  id            Int      @id @default(autoincrement())
+  imageFilename String
+  seasonId      Int
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  itemKey       String // matches a SeasonExtraItem.key within this season - "unknown" if classification failed
+  rawJson       String   @default("{}")
+  confidence    Float
+  status        String // "committed" | "needs_review" - no "pending_confirmation" tier: ranking_list
+  // is always auto-commit-on-success, same as weekly ranking_list categories
+  // (only free_text needs a person's confirmation, and season items aren't that shape)
+  createdAt DateTime @default(now())
 }
 
 // One reward band for a season, in rank order. Band `order` 1 covers the top `commanderCount`
