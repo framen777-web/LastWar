@@ -169,6 +169,11 @@ model WeeklyStat {
   updatedAt   DateTime @updatedAt
 
   @@unique([memberId, weekNumber, categoryKey])
+  // memberId alone is already covered by the unique index above (leftmost-column lookups
+  // are fine on Postgres) - this one is for weekNumber-only filters (e.g.
+  // getActiveMemberIdsForWeek), which the unique index can't serve since weekNumber isn't
+  // its leading column.
+  @@index([weekNumber])
 }
 
 // Generalizes what used to be a bespoke AE-only import table to every category: one
@@ -194,6 +199,11 @@ model CategoryRecord {
   updatedAt  DateTime @updatedAt
 
   @@unique([categoryId, memberId, weekNumber, dedupKey])
+  // Neither memberId nor weekNumber is the leading column of the unique index above, so a
+  // plain memberId-only lookup (e.g. member merge) or weekNumber-only lookup (e.g.
+  // getActiveMemberIdsForWeek) can't use it - both get their own index.
+  @@index([memberId])
+  @@index([weekNumber])
 }
 
 // A rotation cycle: weeksInCycle * 7 conductor slots and the same number of passenger
@@ -235,6 +245,10 @@ model ConductorSelection {
   createdAt         DateTime       @default(now())
 
   @@unique([roundId, slotIndex, role])
+  // memberId isn't part of any other index here (the unique above is keyed on
+  // roundId/slotIndex/role instead) - a plain memberId lookup (e.g. member merge,
+  // standings) would otherwise be a full table scan.
+  @@index([memberId])
 }
 
 // One reward season - a fixed week range at the end of which contribution is scored and reward

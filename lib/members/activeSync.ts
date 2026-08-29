@@ -21,13 +21,23 @@ export async function syncMemberActiveStatus(): Promise<{ lastCompletedWeek: num
     select: { id: true, role: true, allianceRank: true, isActive: true },
   });
 
+  // Batched into at most two updateMany calls instead of one awaited update() per drifted
+  // member - this ran on every /api/users load (including before/after every member merge),
+  // so a sequential per-row loop turned into real, user-visible latency once there was any
+  // drift to correct.
+  const toActivate: number[] = [];
+  const toDeactivate: number[] = [];
   for (const m of members) {
     if (effectiveRole(m) !== "MEMBER") continue;
     const shouldBeActive = activeIds.has(m.id);
-    if (m.isActive !== shouldBeActive) {
-      await prisma.member.update({ where: { id: m.id }, data: { isActive: shouldBeActive } });
-    }
+    if (m.isActive === shouldBeActive) continue;
+    (shouldBeActive ? toActivate : toDeactivate).push(m.id);
   }
+
+  await Promise.all([
+    toActivate.length > 0 ? prisma.member.updateMany({ where: { id: { in: toActivate } }, data: { isActive: true } }) : null,
+    toDeactivate.length > 0 ? prisma.member.updateMany({ where: { id: { in: toDeactivate } }, data: { isActive: false } }) : null,
+  ]);
 
   return { lastCompletedWeek };
 }
