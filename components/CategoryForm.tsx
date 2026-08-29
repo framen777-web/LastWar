@@ -19,6 +19,7 @@ export type Category = {
   active: boolean;
   sortOrder: number;
   recordCount: number;
+  usedInSeasons: string[];
   cumulative: boolean;
   summaryMode: string;
 };

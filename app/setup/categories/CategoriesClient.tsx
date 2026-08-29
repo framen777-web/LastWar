@@ -43,9 +43,12 @@ export function CategoriesClient() {
   }
 
   async function handleDelete(cat: Category) {
+    const reasons: string[] = [];
+    if (cat.recordCount > 0) reasons.push(`${cat.recordCount} existing record(s)`);
+    if (cat.usedInSeasons.length > 0) reasons.push(`used in season scoring (${cat.usedInSeasons.join(", ")})`);
     const message =
-      cat.recordCount > 0
-        ? `"${cat.name}" has ${cat.recordCount} existing record(s) - it will be deactivated instead of deleted. Continue?`
+      reasons.length > 0
+        ? `"${cat.name}" has ${reasons.join(" and ")} - it will be deactivated instead of deleted. Continue?`
         : `Delete "${cat.name}"? This cannot be undone.`;
     if (!confirm(message)) return;
     await fetch(`/api/categories/${cat.id}`, { method: "DELETE" });

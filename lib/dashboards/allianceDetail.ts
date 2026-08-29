@@ -97,11 +97,10 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
   for (const r of squadsRecords) squadsByKey.set(`${r.memberId}:${r.weekNumber}`, JSON.parse(r.fields) as SquadsFields);
 
   const membersById = new Map(stats.map((s) => [s.memberId, s.member]));
-  for (const r of squadsRecords) {
-    if (!membersById.has(r.memberId)) {
-      const member = await prisma.member.findUnique({ where: { id: r.memberId } });
-      if (member) membersById.set(r.memberId, member);
-    }
+  const missingMemberIds = [...new Set(squadsRecords.map((r) => r.memberId).filter((id) => !membersById.has(id)))];
+  if (missingMemberIds.length > 0) {
+    const missingMembers = await prisma.member.findMany({ where: { id: { in: missingMemberIds } } });
+    for (const member of missingMembers) membersById.set(member.id, member);
   }
 
   // Only members active in the indicator week (the last week of the range) - matches this

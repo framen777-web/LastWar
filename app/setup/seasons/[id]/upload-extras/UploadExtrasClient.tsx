@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useNavigationBlocker } from "@/components/NavigationBlocker";
 
@@ -8,6 +8,8 @@ const LEAVE_WARNING =
   "An upload is still processing. Leaving won't stop it - files already queued keep uploading in the background - but you'll lose the progress and results view. Leave anyway?";
 
 type SeasonExtraItem = { key: string; name: string };
+
+type NeedsReviewRow = { id: number; imageFilename: string; itemKey: string; confidence: number };
 
 type PipelineResult = {
   filename: string;
@@ -45,15 +47,28 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [results, setResults] = useState<PipelineResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsReview, setNeedsReview] = useState<NeedsReviewRow[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { setBlock } = useNavigationBlocker();
+
+  const loadNeedsReview = useCallback(() => {
+    fetch(`/api/seasons/${seasonId}/upload-extras/needs-review`)
+      .then((res) => res.json())
+      .then((data) => setNeedsReview(data.rows ?? []));
+  }, [seasonId]);
 
   useEffect(() => {
     fetch(`/api/seasons/${seasonId}`)
       .then((res) => res.json())
       .then((data) => setItems(data.extraItems ?? []))
       .finally(() => setItemsLoading(false));
-  }, [seasonId]);
+    loadNeedsReview();
+  }, [seasonId, loadNeedsReview]);
+
+  async function dismissNeedsReview(rowId: number) {
+    await fetch(`/api/seasons/${seasonId}/upload-extras/needs-review/${rowId}`, { method: "DELETE" });
+    setNeedsReview((rows) => rows.filter((r) => r.id !== rowId));
+  }
 
   // Covers an actual tab close/refresh/typed URL - in-app navigation (NavHeader's Back/Home)
   // goes through useNavigationBlocker instead, since beforeunload doesn't fire for Next.js
@@ -124,6 +139,7 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
         }
       }
       setResults(collected.length > 0 ? collected : null);
+      if (collected.some((r) => r.status === "needs_review")) loadNeedsReview();
 
       const messages: string[] = [];
       if (cancelled) {
@@ -241,6 +257,28 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
       </form>
 
       {error && <p className="text-red-600 text-sm whitespace-pre-line">{error}</p>}
+
+      {needsReview.length > 0 && (
+        <div className="flex flex-col gap-2 border border-amber-200 bg-amber-50 rounded p-3">
+          <h2 className="font-medium text-sm">Needs review ({needsReview.length})</h2>
+          <p className="text-neutral-500 text-xs">
+            These screenshots weren&apos;t automatically applied. Re-upload them using the Item dropdown above to
+            pick manually, then dismiss the ones you&apos;ve handled.
+          </p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {needsReview.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {r.imageFilename} · guessed &quot;{itemName(r.itemKey)}&quot; ({Math.round(r.confidence * 100)}%)
+                </span>
+                <button onClick={() => dismissNeedsReview(r.id)} className="text-neutral-500 hover:text-neutral-900 text-xs shrink-0">
+                  Dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {results && (
         <div className="flex flex-col gap-2">

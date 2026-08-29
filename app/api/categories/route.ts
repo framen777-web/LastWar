@@ -11,11 +11,24 @@ export async function GET() {
   const categories = await prisma.category.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
-  const counts = await prisma.categoryRecord.groupBy({ by: ["categoryId"], _count: { _all: true } });
+  const [counts, pointsUsage, weightUsage] = await Promise.all([
+    prisma.categoryRecord.groupBy({ by: ["categoryId"], _count: { _all: true } }),
+    prisma.seasonCategoryPoints.findMany({ include: { season: { select: { name: true } } } }),
+    prisma.seasonCategoryWeight.findMany({ include: { season: { select: { name: true } } } }),
+  ]);
   const countByCategoryId = new Map(counts.map((c) => [c.categoryId, c._count._all]));
+  const seasonNamesByKey = new Map<string, Set<string>>();
+  for (const u of [...pointsUsage, ...weightUsage]) {
+    if (!seasonNamesByKey.has(u.categoryKey)) seasonNamesByKey.set(u.categoryKey, new Set());
+    seasonNamesByKey.get(u.categoryKey)!.add(u.season.name);
+  }
 
   return NextResponse.json({
-    categories: categories.map((c) => ({ ...serialize(c), recordCount: countByCategoryId.get(c.id) ?? 0 })),
+    categories: categories.map((c) => ({
+      ...serialize(c),
+      recordCount: countByCategoryId.get(c.id) ?? 0,
+      usedInSeasons: [...(seasonNamesByKey.get(c.key) ?? [])],
+    })),
   });
 }
 

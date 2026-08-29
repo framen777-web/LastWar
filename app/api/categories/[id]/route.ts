@@ -102,9 +102,15 @@ export async function DELETE(_request: Request, ctx: RouteContext<"/api/categori
 
   const recordCount = await prisma.categoryRecord.count({ where: { categoryId } });
 
-  if (recordCount > 0) {
+  const [pointsUsage, weightUsage] = await Promise.all([
+    prisma.seasonCategoryPoints.findMany({ where: { categoryKey: category.key }, include: { season: { select: { name: true } } } }),
+    prisma.seasonCategoryWeight.findMany({ where: { categoryKey: category.key }, include: { season: { select: { name: true } } } }),
+  ]);
+  const seasonNames = [...new Set([...pointsUsage, ...weightUsage].map((u) => u.season.name))];
+
+  if (recordCount > 0 || seasonNames.length > 0) {
     await prisma.category.update({ where: { id: categoryId }, data: { active: false } });
-    return NextResponse.json({ softDeleted: true, recordCount });
+    return NextResponse.json({ softDeleted: true, recordCount, seasonNames });
   }
 
   await prisma.category.delete({ where: { id: categoryId } });
