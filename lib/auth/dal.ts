@@ -57,3 +57,11 @@ export async function requireAuthApi(): Promise<{ user: CurrentUser } | { error:
   if (!user) return { error: NextResponse.json({ error: "Not authenticated." }, { status: 401 }) };
   return { user };
 }
+
+/** Same shape as requireAdminApi, but for a caller-specified set of allowed roles. */
+export async function requireRoleApi(allowed: Role[]): Promise<{ user: CurrentUser } | { error: NextResponse }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: NextResponse.json({ error: "Not authenticated." }, { status: 401 }) };
+  if (!allowed.includes(user.role)) return { error: NextResponse.json({ error: "You don't have access to do this." }, { status: 403 }) };
+  return { user };
+}

@@ -51,6 +51,7 @@ model Member {
   seasonExtraValues   SeasonExtraValue[]
   seasonResults       SeasonResult[]
   pivotViews          PivotView[]
+  feedbackItems       FeedbackItem[]
 }
 
 model Category {
@@ -434,4 +435,26 @@ model PivotView {
 
   @@unique([creatorId, name])
   @@index([creatorId])
+}
+
+// A bug report or feature request submitted by any member - visible to everyone (not
+// per-submitter scoped like PivotView), status changeable only by ADMIN/LEADER. No unique
+// constraint tying this to one member, so a merge just moves every row, no conflict handling
+// needed (unlike PivotView's name collisions). No onDelete: Cascade on `submittedBy` - same
+// convention as every other Member-referencing model here - a merge must explicitly move these
+// rows before deleting the merged-away member, or the delete fails on a RESTRICT violation.
+model FeedbackItem {
+  id            Int      @id @default(autoincrement())
+  type          String // "bug" | "feature"
+  title         String
+  description   String
+  status        String   @default("open") // "open" | "in_progress" | "resolved" | "wont_fix"
+  submittedById Int
+  submittedBy   Member   @relation(fields: [submittedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([submittedById])
+  @@index([status])
+  @@index([type])
 }

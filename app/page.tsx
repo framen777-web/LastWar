@@ -52,6 +52,16 @@ export default async function Home() {
       {visible("home-settings") && (
         <MenuButton href="/setup" label="Settings" description="Categories and configuration" icon="⚙️" accentKey="settings" index={4} />
       )}
+      {visible("home-feedback") && (
+        <MenuButton
+          href="/feedback"
+          label="Bug Reports & Ideas"
+          description="Report a bug, suggest a feature, or see what's already reported"
+          icon="🗣️"
+          accentKey="feedback"
+          index={5}
+        />
+      )}
     </div>
   );
 }

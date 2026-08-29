@@ -146,6 +146,7 @@ const MENU_ITEMS = [
   },
   { key: "home-dashboards", label: "Reports", href: "/dashboards", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
   { key: "home-settings", label: "Settings", href: "/setup", roles: ["ADMIN"], parentKey: null },
+  { key: "home-feedback", label: "Bug Reports & Ideas", href: "/feedback", roles: ["ADMIN", "LEADER", "MEMBER"], parentKey: null },
 
   { key: "uploads-image-uploads", label: "Image uploads", href: "/upload", roles: ["ADMIN"], parentKey: "home-uploads" },
   { key: "uploads-review", label: "Upload review", href: "/dashboard", roles: ["ADMIN", "LEADER"], parentKey: "home-uploads" },

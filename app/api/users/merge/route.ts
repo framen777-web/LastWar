@@ -16,8 +16,8 @@ import { createSession } from "@/lib/auth/session";
  * prisma.member.delete() at the end fails outright on a RESTRICT constraint violation for
  * whichever table still has a row pointing at the merged-away member. Currently that's
  * WeeklyStat, CategoryRecord, Suggestion, ConductorSelection, SeasonExtraValue, SeasonResult,
- * and PivotView - if a future feature adds another Member-referencing table, it needs the
- * same move-or-drop treatment added here too.
+ * PivotView, and FeedbackItem - if a future feature adds another Member-referencing table, it
+ * needs the same move-or-drop treatment added here too.
  */
 export async function POST(request: Request) {
   const gate = await requireAdminApi();
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     mergeSeasonResults,
     keepPivotViews,
     mergePivotViews,
+    mergeFeedbackItems,
   ] = await Promise.all([
     prisma.weeklyStat.findMany({ where: { memberId: keepId } }),
     prisma.weeklyStat.findMany({ where: { memberId: mergeId } }),
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
     prisma.seasonResult.findMany({ where: { memberId: mergeId } }),
     prisma.pivotView.findMany({ where: { creatorId: keepId } }),
     prisma.pivotView.findMany({ where: { creatorId: mergeId } }),
+    prisma.feedbackItem.findMany({ where: { submittedById: mergeId } }),
   ]);
 
   const keepStatKeys = new Set(keepStats.map((s) => `${s.weekNumber}:${s.categoryKey}`));
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
     prisma.seasonResult.deleteMany({ where: { id: { in: seasonResultsToDrop.map((r) => r.id) } } }),
     prisma.pivotView.updateMany({ where: { id: { in: pivotViewsToMove.map((v) => v.id) } }, data: { creatorId: keepId } }),
     prisma.pivotView.deleteMany({ where: { id: { in: pivotViewsToDrop.map((v) => v.id) } } }),
+    prisma.feedbackItem.updateMany({ where: { id: { in: mergeFeedbackItems.map((f) => f.id) } }, data: { submittedById: keepId } }),
     prisma.member.update({ where: { id: keepId }, data: { aliases: [...aliases].join(", ") } }),
     prisma.member.delete({ where: { id: mergeId } }),
   ]);
@@ -145,6 +148,7 @@ export async function POST(request: Request) {
     seasonResultsDropped: seasonResultsToDrop.length,
     pivotViewsMoved: pivotViewsToMove.length,
     pivotViewsDropped: pivotViewsToDrop.length,
+    feedbackItemsMoved: mergeFeedbackItems.length,
     mergedOwnName,
     newMemberId: mergedOwnName ? keepId : undefined,
   });
