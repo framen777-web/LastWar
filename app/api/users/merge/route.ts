@@ -11,6 +11,13 @@ import { createSession } from "@/lib/auth/session";
  * deleted. On conflict (both members already have a row at the same natural key), the
  * kept member's row wins and the merged-away one is simply dropped - matches "keep"
  * being the intentional primary record.
+ *
+ * Every model with a memberId foreign key to Member must be handled here, or
+ * prisma.member.delete() at the end fails outright on a RESTRICT constraint violation for
+ * whichever table still has a row pointing at the merged-away member. Currently that's
+ * WeeklyStat, CategoryRecord, Suggestion, ConductorSelection, SeasonExtraValue, and
+ * SeasonResult - if a future feature adds another Member-referencing table, it needs the
+ * same move-or-drop treatment added here too.
  */
 export async function POST(request: Request) {
   const gate = await requireAdminApi();
@@ -33,7 +40,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Member not found." }, { status: 404 });
   }
 
-  const [keepStats, mergeStats, keepRecords, mergeRecords, keepSuggestions, mergeSuggestions, mergeSelections] = await Promise.all([
+  const [
+    keepStats,
+    mergeStats,
+    keepRecords,
+    mergeRecords,
+    keepSuggestions,
+    mergeSuggestions,
+    mergeSelections,
+    keepSeasonExtraValues,
+    mergeSeasonExtraValues,
+    keepSeasonResults,
+    mergeSeasonResults,
+  ] = await Promise.all([
     prisma.weeklyStat.findMany({ where: { memberId: keepId } }),
     prisma.weeklyStat.findMany({ where: { memberId: mergeId } }),
     prisma.categoryRecord.findMany({ where: { memberId: keepId } }),
@@ -41,11 +60,17 @@ export async function POST(request: Request) {
     prisma.suggestion.findMany({ where: { memberId: keepId } }),
     prisma.suggestion.findMany({ where: { memberId: mergeId } }),
     prisma.conductorSelection.findMany({ where: { memberId: mergeId } }),
+    prisma.seasonExtraValue.findMany({ where: { memberId: keepId } }),
+    prisma.seasonExtraValue.findMany({ where: { memberId: mergeId } }),
+    prisma.seasonResult.findMany({ where: { memberId: keepId } }),
+    prisma.seasonResult.findMany({ where: { memberId: mergeId } }),
   ]);
 
   const keepStatKeys = new Set(keepStats.map((s) => `${s.weekNumber}:${s.categoryKey}`));
   const keepRecordKeys = new Set(keepRecords.map((r) => `${r.categoryId}:${r.weekNumber}:${r.dedupKey}`));
   const keepSuggestionKeys = new Set(keepSuggestions.map((s) => s.weekNumber));
+  const keepSeasonExtraValueKeys = new Set(keepSeasonExtraValues.map((v) => v.itemId));
+  const keepSeasonResultKeys = new Set(keepSeasonResults.map((r) => r.seasonId));
 
   const statsToMove = mergeStats.filter((s) => !keepStatKeys.has(`${s.weekNumber}:${s.categoryKey}`));
   const statsToDrop = mergeStats.filter((s) => keepStatKeys.has(`${s.weekNumber}:${s.categoryKey}`));
@@ -53,6 +78,10 @@ export async function POST(request: Request) {
   const recordsToDrop = mergeRecords.filter((r) => keepRecordKeys.has(`${r.categoryId}:${r.weekNumber}:${r.dedupKey}`));
   const suggestionsToMove = mergeSuggestions.filter((s) => !keepSuggestionKeys.has(s.weekNumber));
   const suggestionsToDrop = mergeSuggestions.filter((s) => keepSuggestionKeys.has(s.weekNumber));
+  const seasonExtraValuesToMove = mergeSeasonExtraValues.filter((v) => !keepSeasonExtraValueKeys.has(v.itemId));
+  const seasonExtraValuesToDrop = mergeSeasonExtraValues.filter((v) => keepSeasonExtraValueKeys.has(v.itemId));
+  const seasonResultsToMove = mergeSeasonResults.filter((r) => !keepSeasonResultKeys.has(r.seasonId));
+  const seasonResultsToDrop = mergeSeasonResults.filter((r) => keepSeasonResultKeys.has(r.seasonId));
 
   const aliases = new Set(
     [...keepMember.aliases.split(","), ...mergeMember.aliases.split(","), mergeMember.name].map((a) => a.trim()).filter(Boolean)
@@ -70,6 +99,13 @@ export async function POST(request: Request) {
     prisma.suggestion.updateMany({ where: { id: { in: suggestionsToMove.map((s) => s.id) } }, data: { memberId: keepId } }),
     prisma.suggestion.deleteMany({ where: { id: { in: suggestionsToDrop.map((s) => s.id) } } }),
     prisma.conductorSelection.updateMany({ where: { id: { in: mergeSelections.map((sel) => sel.id) } }, data: { memberId: keepId } }),
+    prisma.seasonExtraValue.updateMany({
+      where: { id: { in: seasonExtraValuesToMove.map((v) => v.id) } },
+      data: { memberId: keepId },
+    }),
+    prisma.seasonExtraValue.deleteMany({ where: { id: { in: seasonExtraValuesToDrop.map((v) => v.id) } } }),
+    prisma.seasonResult.updateMany({ where: { id: { in: seasonResultsToMove.map((r) => r.id) } }, data: { memberId: keepId } }),
+    prisma.seasonResult.deleteMany({ where: { id: { in: seasonResultsToDrop.map((r) => r.id) } } }),
     prisma.member.update({ where: { id: keepId }, data: { aliases: [...aliases].join(", ") } }),
     prisma.member.delete({ where: { id: mergeId } }),
   ]);
@@ -94,6 +130,10 @@ export async function POST(request: Request) {
     suggestionsMoved: suggestionsToMove.length,
     suggestionsDropped: suggestionsToDrop.length,
     conductorSelectionsMoved: mergeSelections.length,
+    seasonExtraValuesMoved: seasonExtraValuesToMove.length,
+    seasonExtraValuesDropped: seasonExtraValuesToDrop.length,
+    seasonResultsMoved: seasonResultsToMove.length,
+    seasonResultsDropped: seasonResultsToDrop.length,
     mergedOwnName,
     newMemberId: mergedOwnName ? keepId : undefined,
   });

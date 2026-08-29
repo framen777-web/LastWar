@@ -12,6 +12,10 @@ type MergeResult = {
   suggestionsMoved: number;
   suggestionsDropped: number;
   conductorSelectionsMoved: number;
+  seasonExtraValuesMoved: number;
+  seasonExtraValuesDropped: number;
+  seasonResultsMoved: number;
+  seasonResultsDropped: number;
   mergedOwnName?: boolean;
   newMemberId?: number;
 };
@@ -133,7 +137,9 @@ export function MergeClient() {
               Merged: {result.weeklyStatsMoved} stat(s) moved ({result.weeklyStatsDropped} dropped on conflict),{" "}
               {result.categoryRecordsMoved} record(s) moved ({result.categoryRecordsDropped} dropped),{" "}
               {result.suggestionsMoved} suggestion(s) moved ({result.suggestionsDropped} dropped),{" "}
-              {result.conductorSelectionsMoved} conductor selection(s) moved.
+              {result.conductorSelectionsMoved} conductor selection(s) moved,{" "}
+              {result.seasonExtraValuesMoved} season item value(s) moved ({result.seasonExtraValuesDropped} dropped),{" "}
+              {result.seasonResultsMoved} season result(s) moved ({result.seasonResultsDropped} dropped).
               {result.mergedOwnName && " That was your own account - reloading to switch your session over…"}
             </p>
           )}
