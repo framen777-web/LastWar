@@ -92,7 +92,7 @@ const CATEGORIES = [
   },
   {
     key: "members",
-    name: "Members",
+    name: "HQ",
     description:
       "A roster/Members screen showing many members at once, each with a role badge (Warlord/Recruiter/Muse/Butler/Elite), HQ level, last-active time, and online status. Not a ranked competition list.",
     shape: "roster",
