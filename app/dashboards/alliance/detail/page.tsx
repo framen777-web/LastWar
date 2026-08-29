@@ -1,5 +1,6 @@
 import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
 import { ShareReportButton } from "@/components/ShareReportButton";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
@@ -172,12 +173,7 @@ export default async function AllianceDetailReportPage({ searchParams }: PagePro
         </p>
 
         <div className="flex items-center gap-3">
-          <a
-            href={`/api/dashboards/alliance/detail/export?${exportParams.toString()}`}
-            className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50 self-start"
-          >
-            Export to Excel
-          </a>
+          <ExcelExportButton href={`/api/dashboards/alliance/detail/export?${exportParams.toString()}`} className="self-start" />
         </div>
 
         <ZoomWrapper contentId="alliance-detail-content">

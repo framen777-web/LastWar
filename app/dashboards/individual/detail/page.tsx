@@ -1,5 +1,6 @@
 import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
 import { ShareReportButton } from "@/components/ShareReportButton";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
@@ -100,12 +101,7 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
             <div className="flex items-center gap-2">
               <ZoomControl />
               <ShareReportButton targetId="individual-detail-content" filename="individual-detail.png" title={member.name} />
-              <a
-                href={`/api/dashboards/individual/export?member=${member.id}`}
-                className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50"
-              >
-                Export to Excel
-              </a>
+              <ExcelExportButton href={`/api/dashboards/individual/export?member=${member.id}`} />
             </div>
           )}
         </div>

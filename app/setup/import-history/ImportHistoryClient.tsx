@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProgressBar } from "@/components/ProgressBar";
 import { parseCsv } from "@/lib/importCsv/parseCsv";
 import type { ImportMapping } from "@/lib/importCsv/types";
 import { CategoryForm, type Category } from "@/components/CategoryForm";
@@ -557,6 +558,7 @@ export function ImportHistoryClient() {
               Back to mapping
             </button>
           </div>
+          {committing && <ProgressBar className="max-w-xs" />}
         </div>
       )}
 

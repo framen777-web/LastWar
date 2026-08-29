@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ProgressBar } from "@/components/ProgressBar";
 
 // ADMIN-only controls, rendered by the page only when user.role === "ADMIN" - this component
 // assumes that gate has already happened and never checks role itself. Lives on Season Reports
@@ -70,6 +71,7 @@ export function SeasonFinalizeControls({
           >
             {running ? "Reopening…" : "Reopen for editing"}
           </button>
+          {running && <ProgressBar className="max-w-xs" />}
         </>
       ) : (
         <>
@@ -84,6 +86,7 @@ export function SeasonFinalizeControls({
           >
             {running ? "Finalizing…" : "Finalize season"}
           </button>
+          {running && <ProgressBar className="max-w-xs" />}
         </>
       )}
       {error && <p className="text-red-600 text-sm">{error}</p>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ProgressBar } from "@/components/ProgressBar";
 
 // Mirrors lib/conductor/settings.ts's types/defaults locally rather than importing them -
 // that module also exports functions that touch `@/lib/db` (a server-only Prisma client
@@ -397,6 +398,7 @@ function RecalculateButton() {
       >
         {running ? "Recalculating…" : "Recalculate selection points"}
       </button>
+      {running && <ProgressBar className="max-w-xs" />}
       {error && <p className="text-red-600 text-sm">{error}</p>}
       {result && (
         <div className="text-sm flex flex-col gap-1">

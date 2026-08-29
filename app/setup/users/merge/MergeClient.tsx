@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ProgressBar } from "@/components/ProgressBar";
 
 type User = { id: number; name: string };
 
@@ -96,40 +97,45 @@ export function MergeClient() {
         <p className="text-neutral-500 text-sm">Loading…</p>
       ) : (
         <div className="border border-neutral-200 rounded max-w-lg p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-sm flex-wrap">
-            <label className="font-medium">Keep</label>
-            <select
-              value={keepId}
-              onChange={(e) => setKeepId(e.target.value ? Number(e.target.value) : "")}
-              className="border border-neutral-300 rounded px-2 py-1"
-            >
-              <option value="">Select…</option>
-              {sorted.map((u) => (
-                <option key={u.id} value={u.id} disabled={u.id === mergeId}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-            <label className="font-medium">Merge away</label>
-            <select
-              value={mergeId}
-              onChange={(e) => setMergeId(e.target.value ? Number(e.target.value) : "")}
-              className="border border-neutral-300 rounded px-2 py-1"
-            >
-              <option value="">Select…</option>
-              {sorted.map((u) => (
-                <option key={u.id} value={u.id} disabled={u.id === keepId}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="flex flex-col gap-1">
+              <label className="font-medium">Keep</label>
+              <select
+                value={keepId}
+                onChange={(e) => setKeepId(e.target.value ? Number(e.target.value) : "")}
+                className="border border-neutral-300 rounded px-2 py-1.5 w-full"
+              >
+                <option value="">Select…</option>
+                {sorted.map((u) => (
+                  <option key={u.id} value={u.id} disabled={u.id === mergeId}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-medium">Merge away</label>
+              <select
+                value={mergeId}
+                onChange={(e) => setMergeId(e.target.value ? Number(e.target.value) : "")}
+                className="border border-neutral-300 rounded px-2 py-1.5 w-full"
+              >
+                <option value="">Select…</option>
+                {sorted.map((u) => (
+                  <option key={u.id} value={u.id} disabled={u.id === keepId}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={handleMerge}
               disabled={running || keepId === "" || mergeId === ""}
-              className="border border-neutral-300 rounded px-3 py-1 text-sm disabled:opacity-50"
+              className="border border-neutral-300 rounded px-3 py-1.5 text-sm disabled:opacity-50 self-start"
             >
               {running ? "Merging…" : "Merge"}
             </button>
+            {running && <ProgressBar className="max-w-xs" />}
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           {result && (

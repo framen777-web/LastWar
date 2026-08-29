@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper";
 import { ShareReportButton } from "@/components/ShareReportButton";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
@@ -111,12 +112,7 @@ export default async function SeasonReportPage({ searchParams }: PageProps<"/das
           </form>
           <ZoomControl />
           <ShareReportButton targetId="season-report-content" filename={`season-report-${data.season.name}.png`} title="Season Reports" />
-          <a
-            href={`/api/dashboards/season/export?seasonId=${data.season.id}`}
-            className="border border-neutral-300 rounded px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Export to Excel
-          </a>
+          <ExcelExportButton href={`/api/dashboards/season/export?seasonId=${data.season.id}`} />
         </div>
 
         {data.rows.length === 0 ? (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CategoryForm, type Category } from "@/components/CategoryForm";
 import { ResetCategoryWeek } from "@/components/ResetCategoryWeek";
+import { ProgressBar } from "@/components/ProgressBar";
 
 export function CategoriesClient() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -11,6 +12,7 @@ export function CategoriesClient() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [duplicateName, setDuplicateName] = useState<string | undefined>(undefined);
   const [recomputeResult, setRecomputeResult] = useState<{ name: string; recalculated: number } | null>(null);
+  const [recomputing, setRecomputing] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -88,8 +90,10 @@ export function CategoriesClient() {
       `Recompute all ${cat.recordCount} record(s) for "${cat.name}" from their original raw values, using the current divisor? This can't lose data - it only re-derives the stored value.`
     );
     if (!proceed) return;
+    setRecomputing(cat.id);
     const res = await fetch(`/api/categories/${cat.id}/recompute`, { method: "POST" });
     const data = await res.json();
+    setRecomputing(null);
     setRecomputeResult({ name: cat.name, recalculated: data.recalculated });
   }
 
@@ -215,9 +219,14 @@ export function CategoriesClient() {
                     <button onClick={() => openEdit(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
                       Edit
                     </button>
-                    <button onClick={() => handleRecompute(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
+                    <button
+                      onClick={() => handleRecompute(cat)}
+                      disabled={recomputing === cat.id}
+                      className="text-neutral-600 hover:text-neutral-900 mr-2 disabled:opacity-50"
+                    >
                       Recompute
                     </button>
+                    {recomputing === cat.id && <ProgressBar className="max-w-[120px] mt-1" />}
                     <button onClick={() => openDuplicate(cat)} className="text-neutral-600 hover:text-neutral-900 mr-2">
                       Duplicate
                     </button>

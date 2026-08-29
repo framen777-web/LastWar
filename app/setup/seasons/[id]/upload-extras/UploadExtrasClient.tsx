@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useNavigationBlocker } from "@/components/NavigationBlocker";
+import { ProgressBar } from "@/components/ProgressBar";
 
 const LEAVE_WARNING =
   "An upload is still processing. Leaving won't stop it - files already queued keep uploading in the background - but you'll lose the progress and results view. Leave anyway?";
@@ -249,9 +250,12 @@ export function UploadExtrasClient({ seasonId }: { seasonId: number }) {
             </button>
           )}
           {progress && (
-            <span className="text-sm text-neutral-500">
-              Busy with file {progress.current} of {progress.total}
-            </span>
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-neutral-500">
+                Busy with file {progress.current} of {progress.total}
+              </span>
+              <ProgressBar value={progress.current / progress.total} className="max-w-xs" />
+            </div>
           )}
         </div>
       </form>

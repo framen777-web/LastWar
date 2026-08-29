@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { ProgressBar } from "@/components/ProgressBar";
 
 const REQUIRED_CONFIRM_TEXT = "RESTORE";
 
@@ -89,12 +91,7 @@ export function BackupRestoreClient() {
           Downloads every table in the database as one JSON file - everything needed to fully restore the app to
           this exact state later.
         </p>
-        <a
-          href="/api/backup"
-          className="self-start bg-accent text-accent-contrast rounded px-4 py-2 text-sm mt-1"
-        >
-          Download backup
-        </a>
+        <ExcelExportButton href="/api/backup" label="Download backup" className="self-start" />
       </section>
 
       <section className="flex flex-col gap-3 border border-red-200 rounded p-4">
@@ -106,9 +103,7 @@ export function BackupRestoreClient() {
 
         <div className="flex flex-col gap-1">
           <p className="text-sm font-medium">Step 1 - download a safety backup first</p>
-          <a href="/api/backup" className="self-start border border-neutral-300 rounded px-3 py-1.5 text-sm">
-            Download backup
-          </a>
+          <ExcelExportButton href="/api/backup" label="Download backup" className="self-start" />
           <p className="text-neutral-400 text-xs">
             Strongly recommended - once you restore, whatever the database held before is gone unless you have this.
           </p>
@@ -154,6 +149,7 @@ export function BackupRestoreClient() {
           >
             {restoring ? "Restoring…" : "Restore"}
           </button>
+          {restoring && <ProgressBar className="max-w-xs" />}
         </form>
 
         {mismatchMessage && (
@@ -186,12 +182,7 @@ export function BackupRestoreClient() {
           Downloads a single .xlsx file with one sheet per meaningful data table - readable directly in Excel, or
           importable into Google Sheets via File → Import → Upload.
         </p>
-        <a
-          href="/api/export/all"
-          className="self-start border border-neutral-300 rounded px-4 py-2 text-sm mt-1"
-        >
-          Download Excel export
-        </a>
+        <ExcelExportButton href="/api/export/all" label="Download Excel export" className="self-start" />
       </section>
     </div>
   );

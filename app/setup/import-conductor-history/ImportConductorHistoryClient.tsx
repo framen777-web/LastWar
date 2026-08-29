@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProgressBar } from "@/components/ProgressBar";
 import { parseCsv } from "@/lib/importCsv/parseCsv";
 
 type Step = "upload" | "map" | "preview" | "done";
@@ -354,6 +355,7 @@ export function ImportConductorHistoryClient() {
               Back to mapping
             </button>
           </div>
+          {committing && <ProgressBar className="max-w-xs" />}
         </div>
       )}
 
