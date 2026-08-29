@@ -12,6 +12,8 @@ type MergeResult = {
   suggestionsMoved: number;
   suggestionsDropped: number;
   conductorSelectionsMoved: number;
+  mergedOwnName?: boolean;
+  newMemberId?: number;
 };
 
 export function MergeClient() {
@@ -65,6 +67,15 @@ export function MergeClient() {
     setResult(data);
     setKeepId("");
     setMergeId("");
+
+    if (data.mergedOwnName) {
+      // The server already re-pointed our session cookie at the surviving member (see
+      // /api/users/merge) - a reload is all that's needed to pick it up everywhere (NavHeader,
+      // this page's own admin-only access check, etc.). Brief delay so the result message above
+      // is actually visible before the page reloads out from under it.
+      setTimeout(() => window.location.reload(), 500);
+      return;
+    }
     await load();
   }
 
@@ -123,6 +134,7 @@ export function MergeClient() {
               {result.categoryRecordsMoved} record(s) moved ({result.categoryRecordsDropped} dropped),{" "}
               {result.suggestionsMoved} suggestion(s) moved ({result.suggestionsDropped} dropped),{" "}
               {result.conductorSelectionsMoved} conductor selection(s) moved.
+              {result.mergedOwnName && " That was your own account - reloading to switch your session over…"}
             </p>
           )}
         </div>

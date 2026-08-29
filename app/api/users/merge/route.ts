@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/auth/dal";
+import { createSession } from "@/lib/auth/session";
 
 /**
  * Merges two Member rows that turned out to be the same person (missed during import -
@@ -14,6 +15,7 @@ import { requireAdminApi } from "@/lib/auth/dal";
 export async function POST(request: Request) {
   const gate = await requireAdminApi();
   if ("error" in gate) return gate.error;
+  const currentUser = gate.user;
 
   const body = (await request.json()) as { keepId?: number; mergeId?: number };
   const keepId = Number(body.keepId);
@@ -57,17 +59,31 @@ export async function POST(request: Request) {
   );
   aliases.delete(keepMember.name);
 
+  // Batched updateMany/deleteMany instead of one statement per row - functionally identical
+  // to the old per-row .map(), but a merge touching hundreds of rows sends a handful of
+  // statements instead of hundreds of individual ones.
   await prisma.$transaction([
-    ...statsToMove.map((s) => prisma.weeklyStat.update({ where: { id: s.id }, data: { memberId: keepId } })),
-    ...statsToDrop.map((s) => prisma.weeklyStat.delete({ where: { id: s.id } })),
-    ...recordsToMove.map((r) => prisma.categoryRecord.update({ where: { id: r.id }, data: { memberId: keepId } })),
-    ...recordsToDrop.map((r) => prisma.categoryRecord.delete({ where: { id: r.id } })),
-    ...suggestionsToMove.map((s) => prisma.suggestion.update({ where: { id: s.id }, data: { memberId: keepId } })),
-    ...suggestionsToDrop.map((s) => prisma.suggestion.delete({ where: { id: s.id } })),
-    ...mergeSelections.map((sel) => prisma.conductorSelection.update({ where: { id: sel.id }, data: { memberId: keepId } })),
+    prisma.weeklyStat.updateMany({ where: { id: { in: statsToMove.map((s) => s.id) } }, data: { memberId: keepId } }),
+    prisma.weeklyStat.deleteMany({ where: { id: { in: statsToDrop.map((s) => s.id) } } }),
+    prisma.categoryRecord.updateMany({ where: { id: { in: recordsToMove.map((r) => r.id) } }, data: { memberId: keepId } }),
+    prisma.categoryRecord.deleteMany({ where: { id: { in: recordsToDrop.map((r) => r.id) } } }),
+    prisma.suggestion.updateMany({ where: { id: { in: suggestionsToMove.map((s) => s.id) } }, data: { memberId: keepId } }),
+    prisma.suggestion.deleteMany({ where: { id: { in: suggestionsToDrop.map((s) => s.id) } } }),
+    prisma.conductorSelection.updateMany({ where: { id: { in: mergeSelections.map((sel) => sel.id) } }, data: { memberId: keepId } }),
     prisma.member.update({ where: { id: keepId }, data: { aliases: [...aliases].join(", ") } }),
     prisma.member.delete({ where: { id: mergeId } }),
   ]);
+
+  // If the admin merged away their OWN member row (the one their session is currently pointing
+  // at), that row no longer exists - their next request's getCurrentUser() would find nothing
+  // and silently treat them as logged out. Re-point their session to the survivor directly,
+  // server-side, using keepId already validated in this same authenticated request - not a
+  // client-supplied id, which would otherwise let any caller redirect their session to an
+  // arbitrary member.
+  const mergedOwnName = currentUser.id === mergeId;
+  if (mergedOwnName) {
+    await createSession(keepId);
+  }
 
   return NextResponse.json({
     ok: true,
@@ -78,5 +94,7 @@ export async function POST(request: Request) {
     suggestionsMoved: suggestionsToMove.length,
     suggestionsDropped: suggestionsToDrop.length,
     conductorSelectionsMoved: mergeSelections.length,
+    mergedOwnName,
+    newMemberId: mergedOwnName ? keepId : undefined,
   });
 }
