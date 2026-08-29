@@ -15,8 +15,8 @@ import { createSession } from "@/lib/auth/session";
  * Every model with a memberId foreign key to Member must be handled here, or
  * prisma.member.delete() at the end fails outright on a RESTRICT constraint violation for
  * whichever table still has a row pointing at the merged-away member. Currently that's
- * WeeklyStat, CategoryRecord, Suggestion, ConductorSelection, SeasonExtraValue, and
- * SeasonResult - if a future feature adds another Member-referencing table, it needs the
+ * WeeklyStat, CategoryRecord, Suggestion, ConductorSelection, SeasonExtraValue, SeasonResult,
+ * and PivotView - if a future feature adds another Member-referencing table, it needs the
  * same move-or-drop treatment added here too.
  */
 export async function POST(request: Request) {
@@ -52,6 +52,8 @@ export async function POST(request: Request) {
     mergeSeasonExtraValues,
     keepSeasonResults,
     mergeSeasonResults,
+    keepPivotViews,
+    mergePivotViews,
   ] = await Promise.all([
     prisma.weeklyStat.findMany({ where: { memberId: keepId } }),
     prisma.weeklyStat.findMany({ where: { memberId: mergeId } }),
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
     prisma.seasonExtraValue.findMany({ where: { memberId: mergeId } }),
     prisma.seasonResult.findMany({ where: { memberId: keepId } }),
     prisma.seasonResult.findMany({ where: { memberId: mergeId } }),
+    prisma.pivotView.findMany({ where: { creatorId: keepId } }),
+    prisma.pivotView.findMany({ where: { creatorId: mergeId } }),
   ]);
 
   const keepStatKeys = new Set(keepStats.map((s) => `${s.weekNumber}:${s.categoryKey}`));
@@ -71,6 +75,7 @@ export async function POST(request: Request) {
   const keepSuggestionKeys = new Set(keepSuggestions.map((s) => s.weekNumber));
   const keepSeasonExtraValueKeys = new Set(keepSeasonExtraValues.map((v) => v.itemId));
   const keepSeasonResultKeys = new Set(keepSeasonResults.map((r) => r.seasonId));
+  const keepPivotViewNames = new Set(keepPivotViews.map((v) => v.name));
 
   const statsToMove = mergeStats.filter((s) => !keepStatKeys.has(`${s.weekNumber}:${s.categoryKey}`));
   const statsToDrop = mergeStats.filter((s) => keepStatKeys.has(`${s.weekNumber}:${s.categoryKey}`));
@@ -82,6 +87,8 @@ export async function POST(request: Request) {
   const seasonExtraValuesToDrop = mergeSeasonExtraValues.filter((v) => keepSeasonExtraValueKeys.has(v.itemId));
   const seasonResultsToMove = mergeSeasonResults.filter((r) => !keepSeasonResultKeys.has(r.seasonId));
   const seasonResultsToDrop = mergeSeasonResults.filter((r) => keepSeasonResultKeys.has(r.seasonId));
+  const pivotViewsToMove = mergePivotViews.filter((v) => !keepPivotViewNames.has(v.name));
+  const pivotViewsToDrop = mergePivotViews.filter((v) => keepPivotViewNames.has(v.name));
 
   const aliases = new Set(
     [...keepMember.aliases.split(","), ...mergeMember.aliases.split(","), mergeMember.name].map((a) => a.trim()).filter(Boolean)
@@ -106,6 +113,8 @@ export async function POST(request: Request) {
     prisma.seasonExtraValue.deleteMany({ where: { id: { in: seasonExtraValuesToDrop.map((v) => v.id) } } }),
     prisma.seasonResult.updateMany({ where: { id: { in: seasonResultsToMove.map((r) => r.id) } }, data: { memberId: keepId } }),
     prisma.seasonResult.deleteMany({ where: { id: { in: seasonResultsToDrop.map((r) => r.id) } } }),
+    prisma.pivotView.updateMany({ where: { id: { in: pivotViewsToMove.map((v) => v.id) } }, data: { creatorId: keepId } }),
+    prisma.pivotView.deleteMany({ where: { id: { in: pivotViewsToDrop.map((v) => v.id) } } }),
     prisma.member.update({ where: { id: keepId }, data: { aliases: [...aliases].join(", ") } }),
     prisma.member.delete({ where: { id: mergeId } }),
   ]);
@@ -134,6 +143,8 @@ export async function POST(request: Request) {
     seasonExtraValuesDropped: seasonExtraValuesToDrop.length,
     seasonResultsMoved: seasonResultsToMove.length,
     seasonResultsDropped: seasonResultsToDrop.length,
+    pivotViewsMoved: pivotViewsToMove.length,
+    pivotViewsDropped: pivotViewsToDrop.length,
     mergedOwnName,
     newMemberId: mergedOwnName ? keepId : undefined,
   });

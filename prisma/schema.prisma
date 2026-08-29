@@ -50,6 +50,7 @@ model Member {
   conductorSelections ConductorSelection[]
   seasonExtraValues   SeasonExtraValue[]
   seasonResults       SeasonResult[]
+  pivotViews          PivotView[]
 }
 
 model Category {
@@ -412,4 +413,25 @@ model SeasonResult {
   createdAt    DateTime @default(now())
 
   @@unique([seasonId, memberId])
+}
+
+// A saved filter set for the Custom Pivot report (/dashboards/pivot) - private to whoever
+// created it, never shared. `config` is the literal query string the Pivot page reads
+// (e.g. "members=3,7&categories=kills,power&weeks=12") rather than separately-interpreted
+// columns, so loading a saved view is just a redirect to /dashboards/pivot?<config> - the page
+// can never drift out of sync with what a saved view means. No onDelete: Cascade on `creator`
+// (same convention as every other Member-referencing model here) - a merge must explicitly
+// move or drop these rows before deleting the merged-away member, or the delete fails on a
+// RESTRICT violation.
+model PivotView {
+  id        Int      @id @default(autoincrement())
+  creatorId Int
+  creator   Member   @relation(fields: [creatorId], references: [id])
+  name      String
+  config    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, name])
+  @@index([creatorId])
 }

@@ -51,6 +51,16 @@ export default async function DashboardsHubPage() {
             index={3}
           />
         )}
+        {visible("dashboards-pivot") && (
+          <MenuButton
+            href="/dashboards/pivot"
+            label="Custom Pivot"
+            description="Build your own chart and save the views you care about"
+            icon="📈"
+            accentKey="dashboards-pivot"
+            index={4}
+          />
+        )}
       </div>
     </div>
   );

@@ -225,6 +225,14 @@ const MENU_ITEMS = [
     parentKey: "home-dashboards",
   },
 
+  {
+    key: "dashboards-pivot",
+    label: "Custom Pivot",
+    href: "/dashboards/pivot",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: "home-dashboards",
+  },
+
   { key: "reports-hq", label: "HQ Levels", href: "/reports/hq", roles: ["ADMIN", "LEADER"], parentKey: "home-end-of-week-reports" },
   {
     key: "reports-leaderboard",

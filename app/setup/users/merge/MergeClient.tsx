@@ -17,6 +17,8 @@ type MergeResult = {
   seasonExtraValuesDropped: number;
   seasonResultsMoved: number;
   seasonResultsDropped: number;
+  pivotViewsMoved: number;
+  pivotViewsDropped: number;
   mergedOwnName?: boolean;
   newMemberId?: number;
 };
@@ -145,7 +147,8 @@ export function MergeClient() {
               {result.suggestionsMoved} suggestion(s) moved ({result.suggestionsDropped} dropped),{" "}
               {result.conductorSelectionsMoved} conductor selection(s) moved,{" "}
               {result.seasonExtraValuesMoved} season item value(s) moved ({result.seasonExtraValuesDropped} dropped),{" "}
-              {result.seasonResultsMoved} season result(s) moved ({result.seasonResultsDropped} dropped).
+              {result.seasonResultsMoved} season result(s) moved ({result.seasonResultsDropped} dropped),{" "}
+              {result.pivotViewsMoved} saved pivot view(s) moved ({result.pivotViewsDropped} dropped).
               {result.mergedOwnName && " That was your own account - reloading to switch your session over…"}
             </p>
           )}
