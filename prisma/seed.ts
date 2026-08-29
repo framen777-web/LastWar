@@ -274,6 +274,7 @@ const MENU_ITEMS = [
     parentKey: "home-settings",
   },
   { key: "settings-seasons", label: "Seasons", href: "/setup/seasons", roles: ["ADMIN"], parentKey: "home-settings" },
+  { key: "settings-backup", label: "Backup & Restore", href: "/setup/backup", roles: ["ADMIN"], parentKey: "home-settings" },
 ];
 
 async function main() {

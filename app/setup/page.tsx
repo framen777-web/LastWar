@@ -90,6 +90,16 @@ export default async function SetupPage() {
             index={7}
           />
         )}
+        {visible("settings-backup") && (
+          <MenuButton
+            href="/setup/backup"
+            label="Backup & Restore"
+            description="Full data backup, restore, and export to Excel"
+            icon="💾"
+            accentKey="setup-backup"
+            index={8}
+          />
+        )}
       </div>
     </div>
   );
