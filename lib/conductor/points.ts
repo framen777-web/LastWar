@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { getConductorCategoryWeekValues, type CategoryWeekValue } from "./stats";
 import { getConductorSettings } from "./settings";
 
@@ -170,7 +171,23 @@ export async function recalculateSelectionPoints(): Promise<RecalculateResult> {
     }
   }
 
-  await prisma.$transaction(updates.map((u) => prisma.conductorSelection.update({ where: { id: u.id }, data: { pointsAtSelection: u.newValue } })));
+  // A ConductorSelection row exists per day, not per week, so this can be several hundred
+  // rows - Prisma's array-form $transaction() would run each update() as its own
+  // sequential round trip (updateMany() can't help here since every row gets a different
+  // value). One UPDATE ... FROM (VALUES ...) statement does the whole batch in one round
+  // trip instead; Prisma.sql/Prisma.join still fully parameterize every value.
+  if (updates.length > 0) {
+    const rows = Prisma.join(
+      updates.map((u) => Prisma.sql`(${u.id}::integer, ${u.newValue}::double precision)`),
+      ","
+    );
+    await prisma.$executeRaw`
+      UPDATE "ConductorSelection" AS cs
+      SET "pointsAtSelection" = v.points
+      FROM (VALUES ${rows}) AS v(id, points)
+      WHERE cs.id = v.id
+    `;
+  }
 
   let updated = 0;
   let unchanged = 0;
