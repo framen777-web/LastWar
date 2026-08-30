@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getConductorCategoryWeekValues } from "./stats";
 import { getConductorSettings } from "./settings";
-import { pointsForCategoryWeek } from "./points";
+import { pointsForCategoryWeek, computeStandings } from "./points";
 
 export type StatementCategoryDetail = {
   categoryKey: string;
@@ -18,7 +18,11 @@ export type StatementEntry =
   | { type: "earn"; weekNumber: number; points: number; categories: StatementCategoryDetail[]; balanceAfter: number }
   | { type: "reset"; weekNumber: number; roundId: number; roundStartWeek: number; points: number; balanceAfter: number };
 
-export type ConductorStatement = { entries: StatementEntry[]; finalBalance: number };
+export type ConductorStatement = {
+  entries: StatementEntry[];
+  finalBalance: number;
+  categories: { key: string; name: string }[];
+};
 
 /**
  * Unpacks the same ledger computeStandings() already trusts (see points.ts) into a
@@ -95,5 +99,49 @@ export async function getConductorStatement(memberId: number): Promise<Conductor
     }
   }
 
-  return { entries, finalBalance: balance };
+  return { entries, finalBalance: balance, categories: categories.map((c) => ({ key: c.key, name: c.name })) };
+}
+
+export type StatementWeekRow = {
+  weekNumber: number;
+  categoryPoints: Record<string, number>; // categoryKey -> points earned that week
+  resetPoints: number; // total subtracted that week (0 if the member wasn't selected that week)
+  netPoints: number; // sum of category points minus resetPoints
+  balanceAfter: number;
+};
+
+/** Collapses getConductorStatement()'s entries down to one row per week - same numbers, just rolled up for the Summary view and the export. */
+export function summarizeStatementByWeek(entries: StatementEntry[]): StatementWeekRow[] {
+  const byWeek = new Map<number, StatementWeekRow>();
+  for (const entry of entries) {
+    const row = byWeek.get(entry.weekNumber) ?? {
+      weekNumber: entry.weekNumber,
+      categoryPoints: {},
+      resetPoints: 0,
+      netPoints: 0,
+      balanceAfter: 0,
+    };
+    if (entry.type === "earn") {
+      for (const c of entry.categories) row.categoryPoints[c.categoryKey] = (row.categoryPoints[c.categoryKey] ?? 0) + c.points;
+      row.netPoints += entry.points;
+    } else {
+      row.resetPoints += entry.points;
+      row.netPoints -= entry.points;
+    }
+    // entries is already chronological (earn before any same-week reset - see
+    // getConductorStatement's loop), so whichever is processed last correctly
+    // leaves the week's final balance here.
+    row.balanceAfter = entry.balanceAfter;
+    byWeek.set(entry.weekNumber, row);
+  }
+  return [...byWeek.values()].sort((a, b) => a.weekNumber - b.weekNumber);
+}
+
+export type ConductorRank = { rank: number; totalMembers: number; total: number };
+
+/** computeStandings() is already sorted by total descending, so a member's position in it is their rank. */
+export async function getConductorRank(memberId: number): Promise<ConductorRank | null> {
+  const standings = await computeStandings();
+  const index = standings.findIndex((s) => s.memberId === memberId);
+  return index === -1 ? null : { rank: index + 1, totalMembers: standings.length, total: standings[index].total };
 }

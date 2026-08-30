@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { requireAuthApi } from "@/lib/auth/dal";
 import { prisma } from "@/lib/db";
-import { getConductorStatement } from "@/lib/conductor/statement";
+import { getConductorStatement, getConductorRank, summarizeStatementByWeek } from "@/lib/conductor/statement";
 
 export async function GET(request: Request) {
   const gate = await requireAuthApi();
@@ -23,49 +23,32 @@ export async function GET(request: Request) {
   const member = await prisma.member.findUnique({ where: { id: memberId } });
   if (!member) return NextResponse.json({ error: "Member not found." }, { status: 404 });
 
-  const { entries, finalBalance } = await getConductorStatement(memberId);
+  const { entries, categories } = await getConductorStatement(memberId);
+  const rank = await getConductorRank(memberId);
+  const weekRows = summarizeStatementByWeek(entries);
 
+  // One pivoted sheet - each week is a row, each category a column - covers both the
+  // Detail view (per-category columns) and the Summary view (Net/Balance) at once, so
+  // there's no need to keep two export shapes in sync with the two on-screen views.
   const workbook = new ExcelJS.Workbook();
-  const summary = workbook.addWorksheet("Statement");
-  summary.columns = [
-    { header: "Week", key: "week", width: 8 },
-    { header: "Event", key: "event", width: 36 },
-    { header: "Points", key: "points", width: 12 },
-    { header: "Balance", key: "balance", width: 12 },
-  ];
-  summary.getRow(1).font = { bold: true };
-  for (const e of entries) {
-    summary.addRow({
-      week: e.weekNumber,
-      event: e.type === "earn" ? "Earned" : `Selected as Conductor (round week ${e.roundStartWeek})`,
-      points: e.type === "earn" ? e.points : -e.points,
-      balance: e.balanceAfter,
-    });
-  }
-  summary.addRow({ event: "Final balance", balance: finalBalance });
+  const sheet = workbook.addWorksheet("Statement");
 
-  const detail = workbook.addWorksheet("Category Detail");
-  detail.columns = [
-    { header: "Week", key: "week", width: 8 },
-    { header: "Category", key: "category", width: 20 },
-    { header: "Raw Value", key: "rawValue", width: 12 },
-    { header: "Mode", key: "mode", width: 10 },
-    { header: "Formula", key: "formula", width: 28 },
-    { header: "Points", key: "points", width: 12 },
-  ];
-  detail.getRow(1).font = { bold: true };
-  for (const e of entries) {
-    if (e.type !== "earn") continue;
-    for (const c of e.categories) {
-      detail.addRow({
-        week: e.weekNumber,
-        category: c.categoryName,
-        rawValue: c.rawValue,
-        mode: c.mode,
-        formula: c.mode === "rate" ? `${c.rawValue} / ${c.unitSize} * ${c.pointsPerUnit}` : `flat ${c.flatValue}`,
-        points: c.points,
-      });
-    }
+  sheet.addRow([`Member: ${member.name}`]);
+  sheet.addRow([rank ? `Rank: #${rank.rank} of ${rank.totalMembers} (Total: ${rank.total} pts)` : "Rank: not currently active"]);
+  sheet.addRow([]);
+
+  const header = ["Week", ...categories.map((c) => c.name), "Conductor Selected", "Net", "Balance"];
+  sheet.addRow(header);
+  sheet.getRow(4).font = { bold: true };
+
+  for (const w of weekRows) {
+    sheet.addRow([
+      w.weekNumber,
+      ...categories.map((c) => w.categoryPoints[c.key] ?? 0),
+      w.resetPoints > 0 ? -w.resetPoints : 0,
+      w.netPoints,
+      w.balanceAfter,
+    ]);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
