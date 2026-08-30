@@ -36,6 +36,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           />
         </div>
 
+        <a href="/forgot-password" className="text-sm text-accent underline self-end">
+          Forgot your password?
+        </a>
+
         {hasError && <p className="text-red-600 text-sm">Invalid name or password.</p>}
 
         <button type="submit" className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm">

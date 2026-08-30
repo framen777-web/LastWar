@@ -29,3 +29,10 @@ services:
       # instead (see app/settings/SettingsClient.tsx), which stores it in the database.
       - key: GEMINI_API_KEY
         sync: false
+      # Used to build the absolute reset-password link in the forgot-password email - a
+      # server action has no reliable access to the request's own origin. Not a secret.
+      - key: APP_BASE_URL
+        value: https://alliance-stats-tracker.onrender.com
+      # Used to send the forgot-password email via Resend.
+      - key: RESEND_API_KEY
+        sync: false
