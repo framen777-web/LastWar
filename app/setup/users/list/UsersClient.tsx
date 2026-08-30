@@ -62,6 +62,21 @@ export function UsersClient() {
     setBusyId(null);
   }
 
+  async function rejectUser(id: number, name: string) {
+    const proceed = confirm(
+      `Reject "${name}"? This permanently deletes this member and every stat/record attached to their name. This cannot be undone. If this is actually an existing member under a misread or misspelled name, use Merge instead of Reject.`
+    );
+    if (!proceed) return;
+
+    setBusyId(id);
+    setError(null);
+    const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setError(data.error ?? "Something went wrong.");
+    else await load();
+    setBusyId(null);
+  }
+
   const filtered = users.filter((u) => u.name.toLowerCase().includes(filter.toLowerCase()));
 
   return (
@@ -72,8 +87,9 @@ export function UsersClient() {
         else Member) unless overridden here. Members&apos; Active status is automatic - it reflects whether they had
         stats in the last completed week{lastCompletedWeek !== null ? ` (week ${lastCompletedWeek})` : ""}; Admin and
         Leader accounts stay under your manual control below. Members marked <strong>New</strong> were auto-created
-        from a screenshot that didn&apos;t match anyone on the roster - check the name is right (or rename it to
-        match an existing member, then have them merged) and click Confirm to clear the flag.
+        from a screenshot that didn&apos;t match anyone on the roster. If the name is right, click Confirm. If
+        it&apos;s really an existing member under a different spelling, use Merge (below) to combine them. If
+        it&apos;s outright garbage from a misread screenshot, click Reject to remove it and its stats entirely.
       </p>
 
       <input
@@ -116,6 +132,13 @@ export function UsersClient() {
                           className="ml-2 border border-amber-300 text-amber-800 rounded px-2 py-1 text-xs disabled:opacity-50"
                         >
                           Confirm
+                        </button>
+                        <button
+                          onClick={() => rejectUser(u.id, u.name)}
+                          disabled={busyId === u.id}
+                          className="ml-2 border border-red-300 text-red-700 rounded px-2 py-1 text-xs disabled:opacity-50"
+                        >
+                          Reject
                         </button>
                       </>
                     )}

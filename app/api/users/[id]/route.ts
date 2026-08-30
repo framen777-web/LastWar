@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { getMinPasswordLength } from "@/lib/settings";
+import { deleteMemberAndAllData } from "@/lib/pipeline/deleteMember";
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]">) {
   const gate = await requireAdminApi();
@@ -62,4 +63,29 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
 
   const updated = await prisma.member.update({ where: { id: memberId }, data });
   return NextResponse.json({ ok: true, id: updated.id });
+}
+
+// Deliberately narrow - this rejects a bogus auto-created ("New") name, not a general
+// delete-any-member button. A confirmed member already has Merge (combines, preserves
+// history) and the Active toggle (hides, preserves history); neither throws data away,
+// and this route isn't adding a way to do that to a real member.
+export async function DELETE(_request: Request, ctx: RouteContext<"/api/users/[id]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
+  const { id } = await ctx.params;
+  const memberId = Number(id);
+
+  const member = await prisma.member.findUnique({ where: { id: memberId } });
+  if (!member) return NextResponse.json({ error: "Member not found." }, { status: 404 });
+
+  if (member.nameConfirmed) {
+    return NextResponse.json(
+      { error: `Only unconfirmed ("New") members can be rejected this way. Merge or deactivate a confirmed member instead.` },
+      { status: 400 }
+    );
+  }
+
+  await deleteMemberAndAllData(memberId);
+  return NextResponse.json({ ok: true });
 }
