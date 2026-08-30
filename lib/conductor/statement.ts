@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getConductorCategoryWeekValues } from "./stats";
 import { getConductorSettings } from "./settings";
-import { pointsForCategoryWeek, computeStandings } from "./points";
+import { pointsForCategoryWeek, earnedPointsForWeek } from "./points";
 
 export type StatementCategoryDetail = {
   categoryKey: string;
@@ -137,11 +137,71 @@ export function summarizeStatementByWeek(entries: StatementEntry[]): StatementWe
   return [...byWeek.values()].sort((a, b) => a.weekNumber - b.weekNumber);
 }
 
-export type ConductorRank = { rank: number; totalMembers: number; total: number };
+export type WeeklyRank = { weekNumber: number; rank: number; totalMembers: number; balance: number };
 
-/** computeStandings() is already sorted by total descending, so a member's position in it is their rank. */
-export async function getConductorRank(memberId: number): Promise<ConductorRank | null> {
-  const standings = await computeStandings();
-  const index = standings.findIndex((s) => s.memberId === memberId);
-  return index === -1 ? null : { rank: index + 1, totalMembers: standings.length, total: standings[index].total };
+/**
+ * This member's rank among active members at every week from fromWeek through the
+ * alliance's current max known week - not just "now." Built by computing every active
+ * member's running balance as one array (earned points accumulated week by week, with
+ * each conductor reset stepping the array down from its snapshot week onward), then
+ * sorting per week - same formula computeStandings() uses for "now," evaluated at every
+ * historical cutoff instead of just the last one. All in-memory over three queries total -
+ * no per-week database round-trips (the lesson from the recalculate slowness fix).
+ *
+ * Covers the same week range computeStandings() uses for "now," so the last entry in this
+ * map is always exactly today's real rank - no drift between "current rank" and Standings.
+ */
+export async function getConductorRankHistory(memberId: number): Promise<Map<number, WeeklyRank>> {
+  const settings = await getConductorSettings();
+  const [members, categories, values, resets] = await Promise.all([
+    prisma.member.findMany({ where: { isActive: true }, select: { id: true } }),
+    prisma.category.findMany({ where: { active: true, conductorMode: { not: "off" } } }),
+    getConductorCategoryWeekValues(),
+    prisma.conductorSelection.findMany({
+      where: { role: "conductor", memberId: { not: null }, round: { status: "confirmed" } },
+      select: { memberId: true, pointsAtSelection: true, round: { select: { startWeek: true } } },
+    }),
+  ]);
+
+  let maxWeek = settings.fromWeek;
+  for (const key of values.keys()) {
+    const week = Number(key.split(":")[1]);
+    if (week > maxWeek) maxWeek = week;
+  }
+  const weekCount = maxWeek - settings.fromWeek + 1;
+
+  const balanceByMember = new Map<number, number[]>();
+  for (const member of members) {
+    const cumulative = new Array<number>(weekCount);
+    let running = 0;
+    for (let i = 0; i < weekCount; i++) {
+      running += earnedPointsForWeek(categories, values, member.id, settings.fromWeek + i);
+      cumulative[i] = running;
+    }
+    balanceByMember.set(member.id, cumulative);
+  }
+
+  // Each reset steps that member's balance down from its snapshot week onward - a
+  // running total that never gets undone, same as a real ledger.
+  for (const r of resets) {
+    if (r.memberId === null) continue;
+    const snapshotWeek = r.round.startWeek - 1;
+    if (snapshotWeek < settings.fromWeek) continue;
+    const startIndex = snapshotWeek - settings.fromWeek;
+    const arr = balanceByMember.get(r.memberId);
+    if (!arr) continue;
+    for (let i = startIndex; i < weekCount; i++) arr[i] -= r.pointsAtSelection ?? 0;
+  }
+
+  const history = new Map<number, WeeklyRank>();
+  for (let i = 0; i < weekCount; i++) {
+    const week = settings.fromWeek + i;
+    const standingsThisWeek = members
+      .map((m) => ({ memberId: m.id, balance: balanceByMember.get(m.id)![i] }))
+      .sort((a, b) => b.balance - a.balance);
+    const index = standingsThisWeek.findIndex((s) => s.memberId === memberId);
+    if (index === -1) continue; // memberId not active - no rank to report
+    history.set(week, { weekNumber: week, rank: index + 1, totalMembers: standingsThisWeek.length, balance: standingsThisWeek[index].balance });
+  }
+  return history;
 }

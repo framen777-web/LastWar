@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
-import { getConductorStatement, getConductorRank, summarizeStatementByWeek } from "@/lib/conductor/statement";
+import { getConductorStatement, getConductorRankHistory, summarizeStatementByWeek } from "@/lib/conductor/statement";
 import { formatStatNumber } from "@/lib/format";
 import { ExcelExportButton } from "@/components/ExcelExportButton";
 
@@ -23,7 +23,8 @@ export default async function ConductorStatementPage({ searchParams }: PageProps
   const member = await prisma.member.findUnique({ where: { id: selectedMemberId }, select: { id: true, name: true } });
 
   const { entries, finalBalance } = await getConductorStatement(selectedMemberId);
-  const rank = await getConductorRank(selectedMemberId);
+  const rankHistory = await getConductorRankHistory(selectedMemberId);
+  const currentRank = [...rankHistory.values()].at(-1) ?? null;
   const weekRows = view === "summary" ? summarizeStatementByWeek(entries) : null;
 
   // Query string helper so the toggle and the member-picker preserve each other - the
@@ -35,9 +36,9 @@ export default async function ConductorStatementPage({ searchParams }: PageProps
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Conductor Points Statement</h1>
-      {rank && (
+      {currentRank && (
         <p className="text-sm text-neutral-500">
-          Rank #{rank.rank} of {rank.totalMembers} by total points ({formatStatNumber(rank.total)} pts)
+          Currently rank #{currentRank.rank} of {currentRank.totalMembers} ({formatStatNumber(currentRank.balance)} pts)
         </p>
       )}
 
@@ -73,16 +74,24 @@ export default async function ConductorStatementPage({ searchParams }: PageProps
         <p className="text-neutral-500 text-sm">No conductor point activity yet for {member?.name}.</p>
       ) : view === "summary" ? (
         <div className="flex flex-col gap-1">
-          {weekRows!.map((w) => (
-            <div key={w.weekNumber} className="flex justify-between border-b border-neutral-100 py-1 text-sm">
-              <span className="font-medium">Week {w.weekNumber}</span>
-              <span className={w.netPoints >= 0 ? "text-green-700" : "text-red-700"}>
-                {w.netPoints >= 0 ? "+" : ""}
-                {formatStatNumber(w.netPoints)}
-              </span>
-              <span className="text-neutral-500">Balance: {formatStatNumber(w.balanceAfter)}</span>
-            </div>
-          ))}
+          {weekRows!.map((w) => {
+            const r = rankHistory.get(w.weekNumber);
+            return (
+              <div key={w.weekNumber} className="flex justify-between border-b border-neutral-100 py-1 text-sm">
+                <span className="font-medium">Week {w.weekNumber}</span>
+                {r && (
+                  <span className="text-neutral-400 text-xs">
+                    Rank #{r.rank} of {r.totalMembers}
+                  </span>
+                )}
+                <span className={w.netPoints >= 0 ? "text-green-700" : "text-red-700"}>
+                  {w.netPoints >= 0 ? "+" : ""}
+                  {formatStatNumber(w.netPoints)}
+                </span>
+                <span className="text-neutral-500">Balance: {formatStatNumber(w.balanceAfter)}</span>
+              </div>
+            );
+          })}
           <div className="flex justify-end font-semibold text-sm pt-2">Final balance: {formatStatNumber(finalBalance)}</div>
         </div>
       ) : (
@@ -92,6 +101,11 @@ export default async function ConductorStatementPage({ searchParams }: PageProps
               <div key={i} className="border border-neutral-200 rounded p-3">
                 <div className="flex justify-between items-baseline">
                   <span className="font-medium">Week {entry.weekNumber}</span>
+                  {rankHistory.get(entry.weekNumber) && (
+                    <span className="text-xs text-neutral-400">
+                      Rank #{rankHistory.get(entry.weekNumber)!.rank} of {rankHistory.get(entry.weekNumber)!.totalMembers}
+                    </span>
+                  )}
                   <span className="text-green-700">+{formatStatNumber(entry.points)}</span>
                   <span className="text-neutral-500 text-sm">Balance: {formatStatNumber(entry.balanceAfter)}</span>
                 </div>
