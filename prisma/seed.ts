@@ -181,6 +181,13 @@ const MENU_ITEMS = [
     parentKey: "dashboards-individual",
   },
   {
+    key: "individual-conductor-statement",
+    label: "Conductor Statement",
+    href: "/dashboards/individual/statement",
+    roles: ["ADMIN", "LEADER", "MEMBER"],
+    parentKey: "dashboards-individual",
+  },
+  {
     key: "dashboards-alliance",
     label: "Alliance Reports",
     href: "/dashboards/alliance",

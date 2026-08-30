@@ -31,6 +31,16 @@ export default async function IndividualDashboardHubPage() {
             index={1}
           />
         )}
+        {visible("individual-conductor-statement") && (
+          <MenuButton
+            href="/dashboards/individual/statement"
+            label="Conductor Statement"
+            description="Week-by-week breakdown of your conductor points"
+            icon="🧾"
+            accentKey="individual-conductor-statement"
+            index={2}
+          />
+        )}
       </div>
     </div>
   );
