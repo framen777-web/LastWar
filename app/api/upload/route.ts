@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 import { runPipelineForImage } from "@/lib/pipeline/run";
 import { requireAdminApi } from "@/lib/auth/dal";
 
@@ -20,17 +19,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
   }
 
-  const uploadsDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-
   const results = [];
   for (const file of files) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const safeName = `${Date.now()}-${sanitizeFilename(file.name)}`;
-    await writeFile(path.join(uploadsDir, safeName), buffer);
+
+    const blob = await put(safeName, buffer, {
+      access: "public",
+      contentType: file.type || "image/png",
+    });
 
     const result = await runPipelineForImage({
-      filename: `/uploads/${safeName}`,
+      filename: blob.url,
       buffer,
       mimeType: file.type || "image/png",
       weekNumber,

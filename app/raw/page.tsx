@@ -27,7 +27,7 @@ export default async function RawDataPage() {
       <ul className="flex flex-col gap-3">
         {extractions.map((ex) => (
           <li key={ex.id} className="border border-neutral-200 rounded p-3 flex gap-3">
-            {ex.imageFilename.startsWith("/uploads/") && (
+            {/^https?:\/\//.test(ex.imageFilename) && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={ex.imageFilename} alt={ex.categoryKey} className="w-20 h-20 object-cover rounded border border-neutral-200" />
             )}
