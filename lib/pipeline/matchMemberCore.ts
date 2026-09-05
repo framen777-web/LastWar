@@ -31,16 +31,18 @@ export function normalize(name: string): string {
 }
 
 function levenshtein(a: string, b: string): number {
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+  const aChars = Array.from(a);
+  const bChars = Array.from(b);
+  const dp: number[][] = Array.from({ length: aChars.length + 1 }, () => new Array(bChars.length + 1).fill(0));
+  for (let i = 0; i <= aChars.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= bChars.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= aChars.length; i++) {
+    for (let j = 1; j <= bChars.length; j++) {
+      const cost = aChars[i - 1] === bChars[j - 1] ? 0 : 1;
       dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
     }
   }
-  return dp[a.length][b.length];
+  return dp[aChars.length][bChars.length];
 }
 
 /**
@@ -68,7 +70,7 @@ export function findMemberId(rawName: string, members: MatchableMember[]): numbe
     }
   }
 
-  const threshold = Math.max(1, Math.round(normalized.length * MATCH_THRESHOLD_RATIO));
+  const threshold = Math.max(1, Math.round(Array.from(normalized).length * MATCH_THRESHOLD_RATIO));
   if (best && best.distance <= threshold) {
     return best.id;
   }
