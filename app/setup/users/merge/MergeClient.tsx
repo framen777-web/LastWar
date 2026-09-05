@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ProgressBar } from "@/components/ProgressBar";
 
-type User = { id: number; name: string };
+type User = { id: number; name: string; recentlyActive: boolean };
 
 type MergeResult = {
   weeklyStatsMoved: number;
@@ -46,6 +46,8 @@ export function MergeClient() {
   }, []);
 
   const sorted = [...users].sort((a, b) => a.name.localeCompare(b.name));
+  const recent = sorted.filter((u) => u.recentlyActive);
+  const rest = sorted.filter((u) => !u.recentlyActive);
 
   async function handleMerge() {
     if (keepId === "" || mergeId === "" || keepId === mergeId) return;
@@ -109,11 +111,24 @@ export function MergeClient() {
                 className="border border-neutral-300 rounded px-2 py-1.5 w-full"
               >
                 <option value="">Select…</option>
-                {sorted.map((u) => (
-                  <option key={u.id} value={u.id} disabled={u.id === mergeId}>
-                    {u.name}
-                  </option>
-                ))}
+                {recent.length > 0 && (
+                  <optgroup label="Active in the last 3 weeks">
+                    {recent.map((u) => (
+                      <option key={u.id} value={u.id} disabled={u.id === mergeId}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {rest.length > 0 && (
+                  <optgroup label="Everyone else">
+                    {rest.map((u) => (
+                      <option key={u.id} value={u.id} disabled={u.id === mergeId}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -124,11 +139,24 @@ export function MergeClient() {
                 className="border border-neutral-300 rounded px-2 py-1.5 w-full"
               >
                 <option value="">Select…</option>
-                {sorted.map((u) => (
-                  <option key={u.id} value={u.id} disabled={u.id === keepId}>
-                    {u.name}
-                  </option>
-                ))}
+                {recent.length > 0 && (
+                  <optgroup label="Active in the last 3 weeks">
+                    {recent.map((u) => (
+                      <option key={u.id} value={u.id} disabled={u.id === keepId}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {rest.length > 0 && (
+                  <optgroup label="Everyone else">
+                    {rest.map((u) => (
+                      <option key={u.id} value={u.id} disabled={u.id === keepId}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             <button
