@@ -26,6 +26,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     isActive?: boolean;
     nameConfirmed?: boolean;
     loginAlias?: string | null;
+    name?: string;
   };
   const data: {
     passwordHash?: string;
@@ -33,6 +34,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     isActive?: boolean;
     nameConfirmed?: boolean;
     loginAlias?: string | null;
+    name?: string;
+    aliases?: string;
   } = {};
 
   if (typeof body.password === "string" && body.password.length > 0) {
@@ -67,6 +70,23 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     data.loginAlias = alias || null;
   }
 
+  if (typeof body.name === "string") {
+    const newName = body.name.trim();
+    if (!newName) {
+      return NextResponse.json({ error: "Name cannot be empty." }, { status: 400 });
+    }
+    if (newName !== current.name) {
+      const existingAliases = current.aliases
+        ? current.aliases.split(",").map((a) => a.trim()).filter(Boolean)
+        : [];
+      if (!existingAliases.some((a) => a.toLowerCase() === current.name.toLowerCase())) {
+        existingAliases.push(current.name);
+      }
+      data.name = newName;
+      data.aliases = existingAliases.join(",");
+    }
+  }
+
   // Guardrail: never leave zero active admins (mirrors spec §11 "Last admin").
   const losingAdmin =
     current.role === "ADMIN" &&
@@ -87,7 +107,12 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     return NextResponse.json({ ok: true, id: updated.id });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return NextResponse.json({ error: "That alias is already taken." }, { status: 400 });
+      const target = err.meta?.target;
+      const onNameField = Array.isArray(target) && target.includes("name");
+      return NextResponse.json(
+        { error: onNameField ? "Another member already has that name." : "That alias is already taken." },
+        { status: 400 }
+      );
     }
     throw err;
   }

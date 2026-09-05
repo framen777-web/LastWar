@@ -1,4 +1,11 @@
 const MATCH_THRESHOLD_RATIO = 0.2;
+// Below this many (code-point) characters, only an exact normalized match auto-links to an
+// existing member. A 1-character difference in a short name is often a genuinely different
+// person ("Inktest" vs "minktest": edit distance 1, which the old ratio-only threshold rounded
+// up to "close enough" and silently combined two different people's stats) rather than OCR
+// noise. Longer names keep proportional typo tolerance, since a 1-2 character slip on a long
+// name is far less likely to coincidentally land on a different real person's name.
+const MIN_LENGTH_FOR_FUZZY_MATCH = 8;
 
 export type MatchableMember = { id: number; name: string; aliases: string };
 
@@ -53,6 +60,7 @@ function levenshtein(a: string, b: string): number {
 export function findMemberId(rawName: string, members: MatchableMember[]): number | null {
   const trimmedName = stripAllianceTag(rawName);
   const normalized = normalize(trimmedName);
+  const normalizedLength = Array.from(normalized).length;
 
   let best: { id: number; distance: number } | null = null;
   for (const member of members) {
@@ -70,7 +78,8 @@ export function findMemberId(rawName: string, members: MatchableMember[]): numbe
     }
   }
 
-  const threshold = Math.max(1, Math.round(Array.from(normalized).length * MATCH_THRESHOLD_RATIO));
+  const threshold =
+    normalizedLength >= MIN_LENGTH_FOR_FUZZY_MATCH ? Math.max(1, Math.round(normalizedLength * MATCH_THRESHOLD_RATIO)) : 0;
   if (best && best.distance <= threshold) {
     return best.id;
   }

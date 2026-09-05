@@ -28,6 +28,30 @@ export async function GET() {
     recentlyActiveIds = new Set(weekSets.flatMap((s) => [...s]));
   }
 
+  // "Ever had a completed week of data" (not just the last-3-weeks window above) - lets the
+  // Users page tell "too new to judge" (auto-created this week, no completed week yet) apart
+  // from "actually gone quiet" (had completed weeks before, just not recently), which the
+  // isActive flag alone can't distinguish.
+  const [statMembersEver, recordMembersEver] =
+    lastCompletedWeek !== null
+      ? await Promise.all([
+          prisma.weeklyStat.findMany({
+            where: { weekNumber: { lte: lastCompletedWeek } },
+            select: { memberId: true },
+            distinct: ["memberId"],
+          }),
+          prisma.categoryRecord.findMany({
+            where: { weekNumber: { lte: lastCompletedWeek } },
+            select: { memberId: true },
+            distinct: ["memberId"],
+          }),
+        ])
+      : [[], []];
+  const everHadCompletedWeekIds = new Set([
+    ...statMembersEver.map((s) => s.memberId),
+    ...recordMembersEver.map((r) => r.memberId),
+  ]);
+
   const members = await prisma.member.findMany({ orderBy: { name: "asc" } });
 
   return NextResponse.json({
@@ -43,6 +67,7 @@ export async function GET() {
       nameConfirmed: m.nameConfirmed,
       loginAlias: m.loginAlias,
       recentlyActive: recentlyActiveIds.has(m.id),
+      everHadCompletedWeek: everHadCompletedWeekIds.has(m.id),
     })),
   });
 }

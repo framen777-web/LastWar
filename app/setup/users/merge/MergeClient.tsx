@@ -33,6 +33,12 @@ export function MergeClient() {
   const [result, setResult] = useState<MergeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [renameId, setRenameId] = useState<number | "">("");
+  const [newName, setNewName] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameResult, setRenameResult] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
     const res = await fetch("/api/users");
@@ -86,6 +92,36 @@ export function MergeClient() {
       setTimeout(() => window.location.reload(), 500);
       return;
     }
+    await load();
+  }
+
+  async function handleRename() {
+    if (renameId === "" || !newName.trim()) return;
+    const oldName = sorted.find((u) => u.id === renameId)?.name;
+    const proceed = confirm(
+      `Rename "${oldName}" to "${newName.trim()}"? Every report and historical record for this member updates ` +
+        `automatically (they're linked by member ID, not name) - "${oldName}" is kept as a recognized alias so a ` +
+        `screenshot still read with the old spelling keeps matching this member instead of creating a duplicate.`
+    );
+    if (!proceed) return;
+
+    setRenaming(true);
+    setRenameError(null);
+    setRenameResult(null);
+    const res = await fetch(`/api/users/${renameId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() }),
+    });
+    const data = await res.json();
+    setRenaming(false);
+    if (!res.ok) {
+      setRenameError(data.error ?? "Rename failed.");
+      return;
+    }
+    setRenameResult(`Renamed "${oldName}" to "${newName.trim()}".`);
+    setRenameId("");
+    setNewName("");
     await load();
   }
 
@@ -182,6 +218,68 @@ export function MergeClient() {
               {result.mergedOwnName && " That was your own account - reloading to switch your session over…"}
             </p>
           )}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="border border-neutral-200 rounded max-w-lg p-4 flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Rename a member</h2>
+            <p className="text-neutral-500 text-sm mt-1">
+              For one real person whose name was just misread - not two rows to combine. Updates every report and
+              historical record automatically.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1 text-sm">
+            <label className="font-medium">Member</label>
+            <select
+              value={renameId}
+              onChange={(e) => setRenameId(e.target.value ? Number(e.target.value) : "")}
+              className="border border-neutral-300 rounded px-2 py-1.5 w-full"
+            >
+              <option value="">Select…</option>
+              {recent.length > 0 && (
+                <optgroup label="Active in the last 3 weeks">
+                  {recent.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {rest.length > 0 && (
+                <optgroup label="Everyone else">
+                  {rest.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1 text-sm">
+            <label className="font-medium">New name</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="border border-neutral-300 rounded px-2 py-1.5 w-full"
+            />
+          </div>
+
+          <button
+            onClick={handleRename}
+            disabled={renaming || renameId === "" || !newName.trim()}
+            className="border border-neutral-300 rounded px-3 py-1.5 text-sm disabled:opacity-50 self-start"
+          >
+            {renaming ? "Renaming…" : "Rename"}
+          </button>
+
+          {renameError && <p className="text-red-600 text-sm">{renameError}</p>}
+          {renameResult && <p className="text-green-700 text-sm">{renameResult}</p>}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { effectiveRole } from "@/lib/auth/roles";
 
 type Role = "ADMIN" | "LEADER" | "MEMBER";
 
@@ -14,6 +15,7 @@ type User = {
   isActive: boolean;
   nameConfirmed: boolean;
   loginAlias: string | null;
+  everHadCompletedWeek: boolean;
 };
 
 export function UsersClient() {
@@ -59,7 +61,21 @@ export function UsersClient() {
     if (!res.ok) {
       setError(data.error ?? "Something went wrong.");
     } else {
-      await load();
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== id) return u;
+          const updated = { ...u };
+          if ("nameConfirmed" in body) updated.nameConfirmed = body.nameConfirmed as boolean;
+          if ("isActive" in body) updated.isActive = body.isActive as boolean;
+          if ("password" in body) updated.hasPassword = true;
+          if ("role" in body) {
+            updated.roleOverride = body.role as Role | null;
+            updated.effectiveRole = effectiveRole({ role: updated.roleOverride, allianceRank: updated.allianceRank });
+          }
+          if ("loginAlias" in body) updated.loginAlias = (body.loginAlias as string) || null;
+          return updated;
+        })
+      );
     }
     setBusyId(null);
   }
@@ -74,8 +90,11 @@ export function UsersClient() {
     setError(null);
     const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) setError(data.error ?? "Something went wrong.");
-    else await load();
+    if (!res.ok) {
+      setError(data.error ?? "Something went wrong.");
+    } else {
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    }
     setBusyId(null);
   }
 
@@ -121,7 +140,7 @@ export function UsersClient() {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className={`border-b border-neutral-100 ${u.isActive ? "" : "opacity-50"}`}>
+                <tr key={u.id} className={`border-b border-neutral-100 ${!u.isActive && u.everHadCompletedWeek ? "opacity-50" : ""}`}>
                   <td className="py-2 pr-3 font-medium whitespace-nowrap">
                     {u.name}
                     {!u.nameConfirmed && (
@@ -211,12 +230,28 @@ export function UsersClient() {
                   </td>
                   <td className="py-2 pr-3">
                     {u.effectiveRole === "MEMBER" ? (
-                      <span
-                        title="Auto-managed from last completed week's stats"
-                        className={`text-xs px-2 py-0.5 rounded ${u.isActive ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-500"}`}
-                      >
-                        {u.isActive ? "Active" : "Inactive"}
-                      </span>
+                      u.isActive ? (
+                        <span
+                          title="Auto-managed from last completed week's stats"
+                          className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800"
+                        >
+                          Active
+                        </span>
+                      ) : u.everHadCompletedWeek ? (
+                        <span
+                          title="Auto-managed from last completed week's stats"
+                          className="text-xs px-2 py-0.5 rounded bg-neutral-100 text-neutral-500"
+                        >
+                          Inactive
+                        </span>
+                      ) : (
+                        <span
+                          title="No completed week of stats yet - too new to judge"
+                          className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800"
+                        >
+                          New
+                        </span>
+                      )
                     ) : (
                       <button
                         onClick={() => patchUser(u.id, { isActive: !u.isActive })}
