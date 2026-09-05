@@ -20,14 +20,21 @@ async function checkPassword(member: Member, password: string): Promise<boolean>
 }
 
 export async function login(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
+  const identifier = String(formData.get("name") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  let member = name ? await prisma.member.findUnique({ where: { name } }) : null;
-  if (!member && name) {
-    const all = await prisma.member.findMany();
-    member = all.find((m) => m.name.toLowerCase() === name.toLowerCase()) ?? null;
-  }
+  const member = identifier
+    ? await prisma.member.findFirst({
+        where: {
+          OR: [
+            { name: { equals: identifier, mode: "insensitive" } },
+            { loginAlias: { equals: identifier, mode: "insensitive" } },
+            { contactEmail: { equals: identifier, mode: "insensitive" } },
+            { contactWhatsapp: identifier },
+          ],
+        },
+      })
+    : null;
 
   const valid = !!member && member.isActive && (await checkPassword(member, password));
   if (!valid || !member) {

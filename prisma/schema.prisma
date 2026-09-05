@@ -40,9 +40,15 @@ model Member {
 
   // Self-reported, optional - so an admin has a way to reach a member who's locked out to
   // arrange a manual password reset (Setup -> Users already lets an admin set a new
-  // password directly; nothing else reads these fields).
-  contactWhatsapp String?
-  contactEmail    String?
+  // password directly). Also usable as login identifiers (see login/actions.ts) - unique
+  // for that reason, not just contact-purposes.
+  contactWhatsapp String? @unique
+  contactEmail    String? @unique
+
+  // Optional plain-text login identifier, set by the member (Account page) or an admin
+  // (Setup -> Users) - for logging in without typing the actual screen name (name stays
+  // whatever the AI extracted, in whatever script, and is what reports always show).
+  loginAlias String? @unique
 
   weeklyStats         WeeklyStat[]
   categoryRecords     CategoryRecord[]

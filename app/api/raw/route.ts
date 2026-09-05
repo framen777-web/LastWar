@@ -7,10 +7,11 @@ export async function GET(request: Request) {
   if ("error" in gate) return gate.error;
 
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
+  const statusParam = searchParams.get("status");
+  const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
 
   const extractions = await prisma.rawExtraction.findMany({
-    where: status ? { status } : undefined,
+    where: statuses ? { status: { in: statuses } } : undefined,
     orderBy: { createdAt: "desc" },
     take: 100,
   });

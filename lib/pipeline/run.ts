@@ -301,10 +301,61 @@ export async function confirmRawExtraction(id: number): Promise<void> {
 
 export async function rejectRawExtraction(id: number): Promise<void> {
   const row = await prisma.rawExtraction.findUniqueOrThrow({ where: { id } });
-  if (row.status !== "pending_confirmation") {
-    throw new Error(`RawExtraction ${id} is not pending confirmation (status: ${row.status})`);
+  if (row.status !== "pending_confirmation" && row.status !== "needs_review") {
+    throw new Error(`RawExtraction ${id} is not pending confirmation or needs review (status: ${row.status})`);
   }
   await prisma.rawExtraction.update({ where: { id }, data: { status: "rejected" } });
+}
+
+// Re-runs extraction for a needs_review row against a manually-chosen category, using the
+// originally-uploaded image (fetched back from its stored Blob URL - see the image-availability
+// check below for rows that predate the Vercel Blob switch). This is the "verify and submit"
+// action behind the Review screen's fix-it UI for needs_review items - unlike
+// confirmRawExtraction, there's no existing rawJson to reuse (needs_review rows are created with
+// rawJson: "{}", precisely because classification/extraction never got that far).
+export async function reprocessNeedsReview(id: number, categoryKey: string): Promise<PipelineResult> {
+  const row = await prisma.rawExtraction.findUniqueOrThrow({ where: { id } });
+  if (row.status !== "needs_review") {
+    throw new Error(`RawExtraction ${id} is not needs_review (status: ${row.status})`);
+  }
+
+  if (!/^https?:\/\//.test(row.imageFilename)) {
+    throw new Error(
+      "The original screenshot isn't available to re-process (this row predates the Vercel Blob " +
+        "switch, or the image was otherwise never stored as a URL) - reject this and re-upload the screenshot instead."
+    );
+  }
+
+  const category = await prisma.category.findUnique({ where: { key: categoryKey } });
+  if (!category || !category.active) {
+    throw new Error(`Unknown or inactive category "${categoryKey}"`);
+  }
+
+  const imageResponse = await fetch(row.imageFilename);
+  if (!imageResponse.ok) {
+    throw new Error(`Couldn't re-fetch the stored image (HTTP ${imageResponse.status}).`);
+  }
+  const buffer = Buffer.from(await imageResponse.arrayBuffer());
+  const imageBase64 = buffer.toString("base64");
+  const mimeType = imageResponse.headers.get("content-type") || "image/png";
+
+  const extracted = await extract(category, imageBase64, mimeType);
+
+  if (category.shape === "free_text") {
+    await prisma.rawExtraction.update({
+      where: { id },
+      data: { categoryKey, rawJson: JSON.stringify(extracted), status: "pending_confirmation" },
+    });
+    return { filename: row.imageFilename, categoryKey, confidence: 1, status: "pending_confirmation" };
+  }
+
+  await prisma.rawExtraction.update({
+    where: { id },
+    data: { categoryKey, rawJson: JSON.stringify(extracted), status: "committed" },
+  });
+  await writeExtraction(category, extracted, row.weekNumber);
+
+  return { filename: row.imageFilename, categoryKey, confidence: 1, status: "committed" };
 }
 
 function describeError(err: unknown): string {

@@ -13,6 +13,7 @@ type User = {
   hasPassword: boolean;
   isActive: boolean;
   nameConfirmed: boolean;
+  loginAlias: string | null;
 };
 
 export function UsersClient() {
@@ -20,6 +21,7 @@ export function UsersClient() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [passwordDrafts, setPasswordDrafts] = useState<Record<number, string>>({});
+  const [aliasDrafts, setAliasDrafts] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minPasswordLength, setMinPasswordLength] = useState(8);
@@ -113,6 +115,7 @@ export function UsersClient() {
                 <th className="py-2 pr-3">Rank</th>
                 <th className="py-2 pr-3">Role</th>
                 <th className="py-2 pr-3">Login</th>
+                <th className="py-2 pr-3">Alias</th>
                 <th className="py-2 pr-3">Active</th>
               </tr>
             </thead>
@@ -180,6 +183,26 @@ export function UsersClient() {
                           setPasswordDrafts((d) => ({ ...d, [u.id]: "" }));
                         }}
                         disabled={busyId === u.id || !(passwordDrafts[u.id] ?? "")}
+                        className="border border-neutral-300 rounded px-2 py-1 text-xs disabled:opacity-50"
+                      >
+                        Set
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={u.loginAlias ?? "No alias"}
+                        value={aliasDrafts[u.id] ?? u.loginAlias ?? ""}
+                        onChange={(e) => setAliasDrafts((d) => ({ ...d, [u.id]: e.target.value }))}
+                        className="border border-neutral-300 rounded px-2 py-1 w-28 text-xs"
+                      />
+                      <button
+                        onClick={async () => {
+                          await patchUser(u.id, { loginAlias: aliasDrafts[u.id] ?? "" });
+                        }}
+                        disabled={busyId === u.id || aliasDrafts[u.id] === undefined}
                         className="border border-neutral-300 rounded px-2 py-1 text-xs disabled:opacity-50"
                       >
                         Set

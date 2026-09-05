@@ -6,7 +6,7 @@ export default async function AccountPage() {
   const user = await requireRole(["ADMIN", "LEADER", "MEMBER"]);
   const contact = await prisma.member.findUnique({
     where: { id: user.id },
-    select: { contactWhatsapp: true, contactEmail: true },
+    select: { contactWhatsapp: true, contactEmail: true, loginAlias: true },
   });
 
   return (
@@ -16,6 +16,7 @@ export default async function AccountPage() {
       initialTheme={user.theme}
       initialWhatsapp={contact?.contactWhatsapp ?? ""}
       initialEmail={contact?.contactEmail ?? ""}
+      initialLoginAlias={contact?.loginAlias ?? ""}
     />
   );
 }

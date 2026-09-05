@@ -22,6 +22,7 @@ export async function GET() {
       hasPassword: !!m.passwordHash,
       isActive: m.isActive,
       nameConfirmed: m.nameConfirmed,
+      loginAlias: m.loginAlias,
     })),
   });
 }

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { getMinPasswordLength } from "@/lib/settings";
 import { deleteMemberAndAllData } from "@/lib/pipeline/deleteMember";
+
+const ALIAS_PATTERN = /^[A-Za-z0-9 _.-]{2,32}$/;
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]">) {
   const gate = await requireAdminApi();
@@ -22,8 +25,15 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     role?: string | null;
     isActive?: boolean;
     nameConfirmed?: boolean;
+    loginAlias?: string | null;
   };
-  const data: { passwordHash?: string; role?: string | null; isActive?: boolean; nameConfirmed?: boolean } = {};
+  const data: {
+    passwordHash?: string;
+    role?: string | null;
+    isActive?: boolean;
+    nameConfirmed?: boolean;
+    loginAlias?: string | null;
+  } = {};
 
   if (typeof body.password === "string" && body.password.length > 0) {
     const minPasswordLength = await getMinPasswordLength();
@@ -46,6 +56,17 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
 
   if (typeof body.nameConfirmed === "boolean") data.nameConfirmed = body.nameConfirmed;
 
+  if (body.loginAlias !== undefined) {
+    const alias = (body.loginAlias ?? "").trim();
+    if (alias && !ALIAS_PATTERN.test(alias)) {
+      return NextResponse.json(
+        { error: "Alias must be 2-32 plain characters: letters, numbers, spaces, underscores, dots, or hyphens." },
+        { status: 400 }
+      );
+    }
+    data.loginAlias = alias || null;
+  }
+
   // Guardrail: never leave zero active admins (mirrors spec §11 "Last admin").
   const losingAdmin =
     current.role === "ADMIN" &&
@@ -61,8 +82,15 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     }
   }
 
-  const updated = await prisma.member.update({ where: { id: memberId }, data });
-  return NextResponse.json({ ok: true, id: updated.id });
+  try {
+    const updated = await prisma.member.update({ where: { id: memberId }, data });
+    return NextResponse.json({ ok: true, id: updated.id });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ error: "That alias is already taken." }, { status: 400 });
+    }
+    throw err;
+  }
 }
 
 // Deliberately narrow - this rejects a bogus auto-created ("New") name, not a general

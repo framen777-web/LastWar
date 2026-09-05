@@ -11,7 +11,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <form action={login} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="name" className="text-sm font-medium">
-            Commander name
+            Commander name, alias, email, or phone
           </label>
           <input
             id="name"

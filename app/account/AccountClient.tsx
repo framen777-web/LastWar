@@ -9,12 +9,14 @@ export function AccountClient({
   initialTheme,
   initialWhatsapp,
   initialEmail,
+  initialLoginAlias,
 }: {
   name: string;
   role: "ADMIN" | "LEADER" | "MEMBER";
   initialTheme: string;
   initialWhatsapp: string;
   initialEmail: string;
+  initialLoginAlias: string;
 }) {
   const [theme, setTheme] = useState(initialTheme);
   const [themeError, setThemeError] = useState<string | null>(null);
@@ -24,6 +26,11 @@ export function AccountClient({
   const [contactError, setContactError] = useState<string | null>(null);
   const [contactSaved, setContactSaved] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
+
+  const [loginAlias, setLoginAlias] = useState(initialLoginAlias);
+  const [aliasError, setAliasError] = useState<string | null>(null);
+  const [aliasSaved, setAliasSaved] = useState(false);
+  const [savingAlias, setSavingAlias] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -117,6 +124,27 @@ export function AccountClient({
     setContactSaved(true);
   }
 
+  async function handleAliasSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAliasError(null);
+    setAliasSaved(false);
+    setSavingAlias(true);
+
+    const res = await fetch("/api/account/alias", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ loginAlias }),
+    });
+    const data = await res.json();
+    setSavingAlias(false);
+
+    if (!res.ok) {
+      setAliasError(data.error ?? "Something went wrong.");
+      return;
+    }
+    setAliasSaved(true);
+  }
+
   return (
     <div className="flex flex-col gap-8 max-w-lg">
       <div>
@@ -127,10 +155,40 @@ export function AccountClient({
       </div>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-semibold">Login alias</h2>
+        <p className="text-neutral-500 text-sm">
+          Your reports always show your screen name ({name}). If it&apos;s awkward to type when logging in,
+          set a plain-text alias here, or use your email/phone below instead - any of them work at the login screen.
+        </p>
+
+        <form onSubmit={handleAliasSubmit} className="flex flex-col gap-3 max-w-sm">
+          <input
+            type="text"
+            value={loginAlias}
+            onChange={(e) => {
+              setLoginAlias(e.target.value);
+              setAliasSaved(false);
+            }}
+            placeholder="e.g. frans"
+            className="border border-neutral-300 rounded px-3 py-2"
+          />
+          {aliasError && <p className="text-red-600 text-sm">{aliasError}</p>}
+          {aliasSaved && <p className="text-green-700 text-sm">Saved.</p>}
+          <button
+            type="submit"
+            disabled={savingAlias}
+            className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50 self-start"
+          >
+            {savingAlias ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
         <h2 className="font-semibold">Contact info</h2>
         <p className="text-neutral-500 text-sm">
-          Optional. If you ever get locked out, this is how an admin can reach you to arrange a password reset -
-          it isn&apos;t used for anything else.
+          Optional. Also usable to log in (see above), and if you ever get locked out, this is how an
+          admin can reach you to arrange a password reset.
         </p>
 
         <form onSubmit={handleContactSubmit} className="flex flex-col gap-3 max-w-sm">

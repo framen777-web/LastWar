@@ -25,9 +25,9 @@ const STATUS_STYLES: Record<PipelineResult["status"], string> = {
 
 const STATUS_LABELS: Record<PipelineResult["status"], string> = {
   committed: "committed",
-  needs_review: "needs review",
+  needs_review: "needs review — see Review",
   pending_confirmation: "needs your confirmation — see Review",
-  error: "error",
+  error: "error — see Review",
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
@@ -259,7 +259,7 @@ export function UploadClient() {
                 <span className="truncate flex-1">{r.filename.split("/").pop()}</span>
                 <span className="text-neutral-500">{r.categoryKey}</span>
                 <span className="text-neutral-500">{Math.round(r.confidence * 100)}%</span>
-                {r.status === "pending_confirmation" ? (
+                {r.status === "pending_confirmation" || r.status === "needs_review" || r.status === "error" ? (
                   <Link
                     href="/review"
                     className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.status]} hover:underline`}
