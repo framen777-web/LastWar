@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { effectiveRole } from "@/lib/auth/roles";
 
 type Role = "ADMIN" | "LEADER" | "MEMBER";
@@ -16,6 +17,7 @@ type User = {
   nameConfirmed: boolean;
   loginAlias: string | null;
   everHadCompletedWeek: boolean;
+  canLogIn: boolean;
 };
 
 export function UsersClient() {
@@ -28,6 +30,7 @@ export function UsersClient() {
   const [error, setError] = useState<string | null>(null);
   const [minPasswordLength, setMinPasswordLength] = useState(8);
   const [lastCompletedWeek, setLastCompletedWeek] = useState<number | null>(null);
+  const [generalPasswordSet, setGeneralPasswordSet] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -35,6 +38,7 @@ export function UsersClient() {
     const data = await res.json();
     setUsers(data.users ?? []);
     setLastCompletedWeek(data.lastCompletedWeek ?? null);
+    setGeneralPasswordSet(data.generalPasswordSet ?? true);
     setLoading(false);
   }
 
@@ -113,6 +117,15 @@ export function UsersClient() {
         it&apos;s outright garbage from a misread screenshot, click Reject to remove it and its stats entirely.
       </p>
 
+      {!generalPasswordSet && (
+        <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-sm">
+          No general password is set - members without their own password can&apos;t log in at all yet
+          (their role is already auto-assigned from Alliance Rank, only login access is missing). Set one
+          in <Link href="/settings" className="underline">Setup → Settings</Link> to give every member,
+          new or existing, automatic access without setting individual passwords one by one.
+        </p>
+      )}
+
       <input
         type="text"
         placeholder="Search by name…"
@@ -181,8 +194,16 @@ export function UsersClient() {
                   </td>
                   <td className="py-2 pr-3">
                     <div className="flex items-center gap-2">
-                      <span className={u.hasPassword ? "text-green-700 text-xs" : "text-neutral-400 text-xs"}>
-                        {u.hasPassword ? "Has password" : "No access"}
+                      <span
+                        className={
+                          u.hasPassword
+                            ? "text-green-700 text-xs"
+                            : u.canLogIn
+                              ? "text-blue-700 text-xs"
+                              : "text-neutral-400 text-xs"
+                        }
+                      >
+                        {u.hasPassword ? "Has password" : u.canLogIn ? "Uses general password" : "No access"}
                       </span>
                       <input
                         type="password"

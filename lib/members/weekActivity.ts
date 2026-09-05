@@ -28,3 +28,17 @@ export async function getActiveMemberIdsForWeekWithFallback(weekNumber: number):
   }
   return new Set();
 }
+
+/**
+ * Members with at least one WeeklyStat or CategoryRecord row at or before this week - i.e.
+ * "has ever had a completed week's worth of data, as of week N." Lets active-status syncing
+ * tell a genuinely brand-new member (who hasn't had the chance to appear in a completed week
+ * yet) apart from a returning member with an actual gap - see activeSync.ts.
+ */
+export async function getMemberIdsWithHistoryThroughWeek(weekNumber: number): Promise<Set<number>> {
+  const [statMembers, recordMembers] = await Promise.all([
+    prisma.weeklyStat.findMany({ where: { weekNumber: { lte: weekNumber } }, select: { memberId: true }, distinct: ["memberId"] }),
+    prisma.categoryRecord.findMany({ where: { weekNumber: { lte: weekNumber } }, select: { memberId: true }, distinct: ["memberId"] }),
+  ]);
+  return new Set([...statMembers.map((s) => s.memberId), ...recordMembers.map((r) => r.memberId)]);
+}

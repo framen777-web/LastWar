@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/auth/dal";
 import { effectiveRole } from "@/lib/auth/roles";
+import { getGeneralPassword } from "@/lib/settings";
 import { syncMemberActiveStatus } from "@/lib/members/activeSync";
-import { getActiveMemberIdsForWeek } from "@/lib/members/weekActivity";
+import { getActiveMemberIdsForWeek, getMemberIdsWithHistoryThroughWeek } from "@/lib/members/weekActivity";
 
 const RECENT_WEEKS = 3;
 
@@ -31,43 +32,34 @@ export async function GET() {
   // "Ever had a completed week of data" (not just the last-3-weeks window above) - lets the
   // Users page tell "too new to judge" (auto-created this week, no completed week yet) apart
   // from "actually gone quiet" (had completed weeks before, just not recently), which the
-  // isActive flag alone can't distinguish.
-  const [statMembersEver, recordMembersEver] =
-    lastCompletedWeek !== null
-      ? await Promise.all([
-          prisma.weeklyStat.findMany({
-            where: { weekNumber: { lte: lastCompletedWeek } },
-            select: { memberId: true },
-            distinct: ["memberId"],
-          }),
-          prisma.categoryRecord.findMany({
-            where: { weekNumber: { lte: lastCompletedWeek } },
-            select: { memberId: true },
-            distinct: ["memberId"],
-          }),
-        ])
-      : [[], []];
-  const everHadCompletedWeekIds = new Set([
-    ...statMembersEver.map((s) => s.memberId),
-    ...recordMembersEver.map((r) => r.memberId),
-  ]);
+  // isActive flag alone can't distinguish. Same helper activeSync.ts uses to decide who's too
+  // new to evaluate for deactivation - one shared definition of "has any history yet."
+  const everHadCompletedWeekIds =
+    lastCompletedWeek !== null ? await getMemberIdsWithHistoryThroughWeek(lastCompletedWeek) : new Set<number>();
 
+  const generalPasswordSet = !!(await getGeneralPassword());
   const members = await prisma.member.findMany({ orderBy: { name: "asc" } });
 
   return NextResponse.json({
     lastCompletedWeek,
-    users: members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      allianceRank: m.allianceRank,
-      roleOverride: m.role,
-      effectiveRole: effectiveRole(m),
-      hasPassword: !!m.passwordHash,
-      isActive: m.isActive,
-      nameConfirmed: m.nameConfirmed,
-      loginAlias: m.loginAlias,
-      recentlyActive: recentlyActiveIds.has(m.id),
-      everHadCompletedWeek: everHadCompletedWeekIds.has(m.id),
-    })),
+    generalPasswordSet,
+    users: members.map((m) => {
+      const role = effectiveRole(m);
+      const hasPassword = !!m.passwordHash;
+      return {
+        id: m.id,
+        name: m.name,
+        allianceRank: m.allianceRank,
+        roleOverride: m.role,
+        effectiveRole: role,
+        hasPassword,
+        canLogIn: hasPassword || (role !== "ADMIN" && generalPasswordSet),
+        isActive: m.isActive,
+        nameConfirmed: m.nameConfirmed,
+        loginAlias: m.loginAlias,
+        recentlyActive: recentlyActiveIds.has(m.id),
+        everHadCompletedWeek: everHadCompletedWeekIds.has(m.id),
+      };
+    }),
   });
 }
