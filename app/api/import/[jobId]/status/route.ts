@@ -9,7 +9,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/import/[job
   const jobId = Number((await ctx.params).jobId);
   const job = await prisma.importJob.findUnique({
     where: { id: jobId },
-    include: { items: { orderBy: { order: "asc" } } },
+    include: { items: { orderBy: { id: "asc" } } },
   });
   if (!job) return NextResponse.json({ error: "Import job not found" }, { status: 404 });
 

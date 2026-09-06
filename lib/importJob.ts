@@ -2,16 +2,20 @@ import { prisma } from "@/lib/db";
 import { runPipelineForImage } from "@/lib/pipeline/run";
 
 /**
- * Works through an ImportJob's queued items one at a time until either the job has none
- * left, the job's own status has moved off "processing" (cancelled elsewhere), or
- * deadlineMs is reached - whichever comes first. Safe to call concurrently for the same
- * job (e.g. an after() callback and a resume() cron tick overlapping): each item is
- * claimed with a conditional update before being processed, so only one caller ever
- * actually runs the pipeline for a given item.
+ * Works through an ImportJob's queued items one at a time until either the whole job is
+ * done (processedFiles has caught up to totalFiles), the job's own status has moved off
+ * "processing" (cancelled elsewhere), deadlineMs is reached, or there's simply nothing
+ * queued to do RIGHT NOW. That last case matters because items can still be arriving one
+ * at a time from the browser's in-flight uploads (see app/api/import/[jobId]/items) - this
+ * just returns rather than marking the job complete, and the next /items call (or the
+ * resume cron, if the browser goes away mid-upload) picks it back up.
  *
- * Always re-fetches the image from its stored Blob URL rather than assuming the caller
- * still has the original bytes in memory - this function may run in a completely
- * different invocation than the one that received the upload.
+ * Safe to call concurrently for the same job (e.g. two /items calls landing close
+ * together, or a resume() cron tick overlapping an after() callback): each item is claimed
+ * with a conditional update before being processed, so only one caller ever actually runs
+ * the pipeline for a given item. Always re-fetches the image from its stored Blob URL
+ * rather than assuming the caller still has the original bytes in memory - this function
+ * may run in a completely different invocation than the one that registered the item.
  */
 export async function processImportJob(jobId: number, deadlineMs: number): Promise<void> {
   while (true) {
@@ -20,11 +24,16 @@ export async function processImportJob(jobId: number, deadlineMs: number): Promi
     const job = await prisma.importJob.findUnique({ where: { id: jobId } });
     if (!job || job.status !== "processing") return;
 
+    if (job.processedFiles >= job.totalFiles) {
+      await prisma.importJob.updateMany({ where: { id: jobId, status: "processing" }, data: { status: "completed" } });
+      return;
+    }
+
     const next = await prisma.importJobItem.findFirst({
       where: { importJobId: jobId, status: "queued" },
-      orderBy: { order: "asc" },
+      orderBy: { id: "asc" },
     });
-    if (!next) break;
+    if (!next) return;
 
     const claimed = await prisma.importJobItem.updateMany({
       where: { id: next.id, status: "queued" },
@@ -62,10 +71,5 @@ export async function processImportJob(jobId: number, deadlineMs: number): Promi
     }
 
     await prisma.importJob.update({ where: { id: jobId }, data: { processedFiles: { increment: 1 } } });
-  }
-
-  const remaining = await prisma.importJobItem.count({ where: { importJobId: jobId, status: { not: "done" } } });
-  if (remaining === 0) {
-    await prisma.importJob.updateMany({ where: { id: jobId, status: "processing" }, data: { status: "completed" } });
   }
 }

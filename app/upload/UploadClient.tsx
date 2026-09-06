@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { upload } from "@vercel/blob/client";
 import { useNavigationBlocker } from "@/components/NavigationBlocker";
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -45,6 +46,39 @@ const STATUS_LABELS: Record<ResultStatus, string> = {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const POLL_INTERVAL_MS = 1500;
+const UPLOAD_CONCURRENCY = 3;
+
+async function uploadFilesToJob(files: File[], jobId: number): Promise<{ filename: string; error: string }[]> {
+  const queue = [...files];
+  const failures: { filename: string; error: string }[] = [];
+
+  async function worker() {
+    while (queue.length > 0) {
+      const file = queue.shift();
+      if (!file) return;
+      try {
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/import/blob-upload",
+        });
+        const res = await fetch(`/api/import/${jobId}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, blobUrl: blob.url, mimeType: file.type || "image/png" }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+      } catch (err) {
+        failures.push({ filename: file.name, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, files.length) }, () => worker()));
+  return failures;
+}
 
 export function UploadClient() {
   const [knownWeeks, setKnownWeeks] = useState<number[]>([]);
@@ -143,15 +177,25 @@ export function UploadClient() {
     setBlock(true, LEAVE_WARNING);
 
     try {
-      const formData = new FormData();
-      formData.set("weekNumber", String(weekNumber));
-      for (const file of files) formData.append("files", file);
+      const startRes = await fetch("/api/import/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekNumber, totalFiles: files.length }),
+      });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.error ?? `HTTP ${startRes.status}`);
 
-      const res = await fetch("/api/import/start", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const newJobId: number = startData.jobId;
+      setJobId(newJobId); // status polling starts immediately - items will appear as each upload finishes
 
-      setJobId(data.jobId);
+      const failures = await uploadFilesToJob(files, newJobId);
+      if (failures.length > 0) {
+        setError(
+          `${failures.length} of ${files.length} file(s) failed to upload:\n${failures
+            .map((f) => `${f.filename}: ${f.error}`)
+            .join("\n")}`
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
