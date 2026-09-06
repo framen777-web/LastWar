@@ -7,6 +7,7 @@ import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
 import { REPORT_NAME_COL_WIDTH, REPORT_VALUE_COL_WIDTH, parseLimitParam, applyLimit } from "@/lib/reportLayout";
 import { LimitSelect } from "@/components/LimitSelect";
+import { getRosterMemberIdsForWeeks } from "@/lib/reports/activeMembers";
 
 // Kills is a lifetime-cumulative reading in-game (never resets) - "this week" and
 // "last N weeks" have to be computed as the gain between cumulative readings, not the
@@ -118,19 +119,22 @@ function getImprovement(series: SeriesRow[], week: number, limit: string) {
 // top-ranking weeks, this is a leaderboard of weeks, not of members. The cumulative
 // category (Kills) instead surfaces each member's latest/highest raw reading, since
 // that reading already *is* their lifetime total (see getLatestCumulative below).
-async function getAllTimeBestWeek(categoryKey: string, limit: string) {
+async function getAllTimeBestWeek(categoryKey: string, limit: string, rosterIds: Set<number>) {
   const stats = await prisma.weeklyStat.findMany({ where: { categoryKey }, include: { member: true } });
-  const rows = stats.map((s) => ({ name: s.member.name, value: s.value, week: s.weekNumber }));
+  const rows = stats
+    .filter((s) => rosterIds.has(s.memberId))
+    .map((s) => ({ name: s.member.name, value: s.value, week: s.weekNumber }));
   return applyLimit(
     rows.sort((a, b) => b.value - a.value),
     limit
   );
 }
 
-async function getLatestCumulative(categoryKey: string, limit: string) {
+async function getLatestCumulative(categoryKey: string, limit: string, rosterIds: Set<number>) {
   const stats = await prisma.weeklyStat.findMany({ where: { categoryKey }, include: { member: true } });
   const latest = new Map<number, { name: string; value: number; week: number }>();
   for (const s of stats) {
+    if (!rosterIds.has(s.memberId)) continue;
     const cur = latest.get(s.memberId);
     if (!cur || s.weekNumber > cur.week) latest.set(s.memberId, { name: s.member.name, value: s.value, week: s.weekNumber });
   }
@@ -176,9 +180,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/repo
   const last5 = topSumOverWeeks(activeSeries, last5Weeks, selectedLimit);
   const last10 = topSumOverWeeks(activeSeries, last10Weeks, selectedLimit);
   const improvement = getImprovement(series, selectedWeek, selectedLimit);
+  const rosterIds = await getRosterMemberIdsForWeeks(selectedWeek);
   const allTime = selectedCategory.cumulative
-    ? await getLatestCumulative(selectedCategory.key, selectedLimit)
-    : await getAllTimeBestWeek(selectedCategory.key, selectedLimit);
+    ? await getLatestCumulative(selectedCategory.key, selectedLimit, rosterIds)
+    : await getAllTimeBestWeek(selectedCategory.key, selectedLimit, rosterIds);
 
   const allTimeLabel = selectedCategory.cumulative ? `Total ${selectedCategory.label}` : `All time ${limitLabel}`;
   const allTimeValueLabel = selectedCategory.cumulative ? `All ${selectedCategory.label}` : "Total Score";

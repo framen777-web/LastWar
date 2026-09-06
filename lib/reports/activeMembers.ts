@@ -31,3 +31,19 @@ export async function getActiveMemberIdsForWeek(weekNumber: number): Promise<Set
 
   return ids;
 }
+
+/**
+ * Union of getActiveMemberIdsForWeek for weekNumber and weekNumber - 1 - "on the current
+ * roster AND part of the last completed roster." This is the roster window every
+ * multi-week report should filter to, so a departed member drops off within a week of
+ * leaving instead of lingering in all-time/summary views forever. weekNumber is normally
+ * the report's own "current/selected" week, not necessarily today's actual latest week -
+ * so a report pinned to a past week gets that week's own roster, not today's.
+ */
+export async function getRosterMemberIdsForWeeks(weekNumber: number): Promise<Set<number>> {
+  const [current, previous] = await Promise.all([
+    getActiveMemberIdsForWeek(weekNumber),
+    weekNumber > 1 ? getActiveMemberIdsForWeek(weekNumber - 1) : Promise.resolve(new Set<number>()),
+  ]);
+  return new Set([...current, ...previous]);
+}

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { getMemberWeekRows } from "@/lib/mvp/data";
 import { computeAllMvp } from "@/lib/mvp/mvp";
 import { getWeights } from "@/lib/mvp/weights";
-import { getActiveMemberIdsForWeek } from "@/lib/reports/activeMembers";
+import { getRosterMemberIdsForWeeks } from "@/lib/reports/activeMembers";
 import { reduceOverRange, type SummaryMode } from "@/lib/reports/summaryMode";
 
 export type AllianceCategory = { key: string; name: string; cumulative: boolean; summaryMode: SummaryMode };
@@ -103,14 +103,15 @@ export async function getAllianceDetailData(filters: AllianceFilters): Promise<{
     for (const member of missingMembers) membersById.set(member.id, member);
   }
 
-  // Only members active in the indicator week (the last week of the range) - matches this
-  // report to the "the last week tells you who's still here" rule used everywhere else.
-  // Skipped when a specific commanderId is requested - that's a deliberate single-person
-  // lookup, not a roster view, so it should still work for someone who's since left.
+  // Only members on the roster in the indicator week (the last week of the range) or the
+  // week before it - "current roster AND last completed roster," same rule every multi-week
+  // report uses. Skipped when a specific commanderId is requested - that's a deliberate
+  // single-person lookup, not a roster view, so it should still work for someone who's
+  // since left.
   if (!commanderId) {
-    const activeInToWeek = await getActiveMemberIdsForWeek(toWeek);
+    const rosterInRange = await getRosterMemberIdsForWeeks(toWeek);
     for (const memberId of [...membersById.keys()]) {
-      if (!activeInToWeek.has(memberId)) membersById.delete(memberId);
+      if (!rosterInRange.has(memberId)) membersById.delete(memberId);
     }
   }
 
