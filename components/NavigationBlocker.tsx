@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 
 const DEFAULT_MESSAGE = "Leave this page? Your changes may be lost.";
 
@@ -24,10 +24,10 @@ export function NavigationBlockerProvider({ children }: { children: React.ReactN
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockMessage, setBlockMessage] = useState(DEFAULT_MESSAGE);
 
-  function setBlock(blocked: boolean, message?: string) {
+  const setBlock = useCallback((blocked: boolean, message?: string) => {
     setIsBlocked(blocked);
     if (message) setBlockMessage(message);
-  }
+  }, []);
 
   return (
     <NavigationBlockerContext.Provider value={{ isBlocked, blockMessage, setBlock }}>

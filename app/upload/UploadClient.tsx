@@ -112,6 +112,16 @@ export function UploadClient() {
     fetch("/api/import/resume", { method: "POST" }).catch(() => {});
   }, []);
 
+  // Clears the navigation block if this component unmounts while it's still set - e.g. the
+  // user confirmed the "leave anyway?" prompt and actually navigated away while an import
+  // was still in flight. Without this, isBlocked stays stuck true in
+  // NavigationBlockerProvider's app-wide state forever afterward (nothing else ever turns
+  // it back off once this component is gone), so every future in-app navigation ANYWHERE
+  // else in the app incorrectly shows this page's "leave anyway?" prompt too.
+  useEffect(() => {
+    return () => setBlock(false);
+  }, [setBlock]);
+
   // Covers an actual tab close/refresh/typed URL - in-app navigation (NavHeader's Back/Home)
   // goes through useNavigationBlocker instead, since beforeunload doesn't fire for Next.js
   // client-side route changes. The import no longer depends on this tab staying open at
