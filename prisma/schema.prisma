@@ -165,6 +165,42 @@ model RawExtraction {
   createdAt     DateTime @default(now())
 }
 
+// One row per browser-initiated "Upload & process" submission. Exists so the actual
+// per-image work (classify -> extract -> write) can run entirely server-side, decoupled
+// from the browser tab that started it - a phone switching away to another app, or the
+// tab being closed outright, no longer stops or restarts an import in progress. See
+// lib/importJob.ts and app/api/import/*.
+model ImportJob {
+  id             Int             @id @default(autoincrement())
+  weekNumber     Int
+  status         String          @default("processing") // "processing" | "completed" | "cancelled"
+  totalFiles     Int
+  processedFiles Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  items          ImportJobItem[]
+}
+
+model ImportJobItem {
+  id           Int       @id @default(autoincrement())
+  importJobId  Int
+  importJob    ImportJob @relation(fields: [importJobId], references: [id])
+  order        Int
+  filename     String
+  blobUrl      String
+  mimeType     String
+  status       String    @default("queued") // "queued" | "processing" | "done"
+  categoryKey  String?
+  confidence   Float?
+  resultStatus String? // "committed" | "needs_review" | "pending_confirmation" | "error" - set once status is "done"
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([importJobId, order])
+  @@index([importJobId, status])
+}
+
 model WeeklyStat {
   id          Int      @id @default(autoincrement())
   memberId    Int

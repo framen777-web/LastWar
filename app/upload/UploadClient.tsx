@@ -6,24 +6,36 @@ import { useNavigationBlocker } from "@/components/NavigationBlocker";
 import { ProgressBar } from "@/components/ProgressBar";
 
 const LEAVE_WARNING =
-  "An upload is still processing. Leaving won't stop it - files already queued keep uploading in the background - but you'll lose the progress and results view. Leave anyway?";
+  "The import keeps running on the server even if you leave this page, switch to another app, or close your browser entirely - but you won't be able to see live progress or results here once you go. Check Review (or the dashboards) afterwards to see how it went. Leave anyway?";
 
-type PipelineResult = {
+type ImportItemStatus = "queued" | "processing" | "done";
+type ResultStatus = "committed" | "needs_review" | "pending_confirmation" | "error";
+
+type ImportItem = {
   filename: string;
-  categoryKey: string;
-  confidence: number;
-  status: "committed" | "needs_review" | "pending_confirmation" | "error";
-  message?: string;
+  status: ImportItemStatus;
+  categoryKey: string | null;
+  confidence: number | null;
+  resultStatus: ResultStatus | null;
+  errorMessage: string | null;
 };
 
-const STATUS_STYLES: Record<PipelineResult["status"], string> = {
+type ImportJobStatus = {
+  jobId: number;
+  status: "processing" | "completed" | "cancelled";
+  totalFiles: number;
+  processedFiles: number;
+  items: ImportItem[];
+};
+
+const STATUS_STYLES: Record<ResultStatus, string> = {
   committed: "bg-green-100 text-green-800",
   needs_review: "bg-amber-100 text-amber-800",
   pending_confirmation: "bg-blue-100 text-blue-800",
   error: "bg-red-100 text-red-800",
 };
 
-const STATUS_LABELS: Record<PipelineResult["status"], string> = {
+const STATUS_LABELS: Record<ResultStatus, string> = {
   committed: "committed",
   needs_review: "needs review — see Review",
   pending_confirmation: "needs your confirmation — see Review",
@@ -32,16 +44,17 @@ const STATUS_LABELS: Record<PipelineResult["status"], string> = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const POLL_INTERVAL_MS = 1500;
 
 export function UploadClient() {
   const [knownWeeks, setKnownWeeks] = useState<number[]>([]);
   const [weekNumber, setWeekNumber] = useState<number>(1);
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [results, setResults] = useState<PipelineResult[] | null>(null);
+  const [jobId, setJobId] = useState<number | null>(null);
+  const [job, setJob] = useState<ImportJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { setBlock } = useNavigationBlocker();
 
   useEffect(() => {
@@ -57,11 +70,18 @@ export function UploadClient() {
       .catch((err) => {
         setError(`Could not load known week numbers: ${err instanceof Error ? err.message : String(err)}`);
       });
+
+    // Nudges any import that got interrupted mid-batch back into motion the moment someone
+    // reopens this page. The real safety net is the external cron hitting
+    // /api/import/resume on a schedule regardless of whether the app is open at all - this
+    // is just a faster path for the common case of reopening it yourself.
+    fetch("/api/import/resume", { method: "POST" }).catch(() => {});
   }, []);
 
   // Covers an actual tab close/refresh/typed URL - in-app navigation (NavHeader's Back/Home)
   // goes through useNavigationBlocker instead, since beforeunload doesn't fire for Next.js
-  // client-side route changes.
+  // client-side route changes. The import no longer depends on this tab staying open at
+  // all (see LEAVE_WARNING) - this is purely about the live view being lost.
   useEffect(() => {
     if (!submitting) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
@@ -72,8 +92,44 @@ export function UploadClient() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [submitting]);
 
-  function handleCancel() {
-    abortControllerRef.current?.abort();
+  // Polls while a job is in flight. Deliberately keeps polling even when the tab is
+  // hidden/backgrounded (no visibilitychange gating) - if the browser throttles or fully
+  // suspends this timer while backgrounded, that only pauses the LIVE VIEW; the import
+  // itself keeps running server-side regardless, and this just picks back up (or shows the
+  // final state) whenever the tab becomes active again.
+  useEffect(() => {
+    if (jobId === null) return;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/import/${jobId}/status`);
+        if (!res.ok) return;
+        const data: ImportJobStatus = await res.json();
+        setJob(data);
+        if (data.status !== "processing") {
+          setSubmitting(false);
+          setBlock(false);
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        }
+      } catch {
+        // Transient network hiccup - next tick tries again.
+      }
+    }
+
+    poll();
+    pollTimerRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, [jobId, setBlock]);
+
+  async function handleCancel() {
+    if (jobId === null) return;
+    try {
+      await fetch(`/api/import/${jobId}/cancel`, { method: "POST" });
+    } catch {
+      // Best-effort - the resume safety net will just find nothing left queued.
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -82,70 +138,28 @@ export function UploadClient() {
 
     setSubmitting(true);
     setError(null);
-    setResults(null);
+    setJob(null);
+    setJobId(null);
     setBlock(true, LEAVE_WARNING);
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    // Processed one file per request (not one batch request) so the button can show
-    // real "file X of N" progress instead of a single opaque "Processing…" for the
-    // whole upload - each file already runs independently server-side. A failure on
-    // one file doesn't stop the rest - they're independent requests, so partial success
-    // is the normal case, not an error condition to abort on.
-    const collected: PipelineResult[] = [];
-    const failed: { filename: string; reason: string }[] = [];
-    let completed = 0;
-    let cancelled = false;
     try {
-      for (let i = 0; i < files.length; i++) {
-        if (controller.signal.aborted) {
-          cancelled = true;
-          break;
-        }
-        setProgress({ current: i + 1, total: files.length });
-        const file = files[i];
+      const formData = new FormData();
+      formData.set("weekNumber", String(weekNumber));
+      for (const file of files) formData.append("files", file);
 
-        try {
-          const formData = new FormData();
-          formData.set("weekNumber", String(weekNumber));
-          formData.append("files", file);
+      const res = await fetch("/api/import/start", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
 
-          const res = await fetch("/api/upload", { method: "POST", body: formData, signal: controller.signal });
-          const data = await res.json();
-
-          if (!res.ok) {
-            failed.push({ filename: file.name, reason: data.error ?? `HTTP ${res.status}` });
-            continue;
-          }
-          collected.push(...data.results);
-        } catch (err) {
-          if (err instanceof DOMException && err.name === "AbortError") {
-            cancelled = true;
-            break;
-          }
-          failed.push({ filename: file.name, reason: err instanceof Error ? err.message : String(err) });
-        } finally {
-          completed++;
-        }
-      }
-      setResults(collected.length > 0 ? collected : null);
-
-      const messages: string[] = [];
-      if (cancelled) {
-        messages.push(`Cancelled - ${completed} of ${files.length} file(s) were attempted before stopping.`);
-      }
-      if (failed.length > 0) {
-        messages.push(`${failed.length} of ${files.length} file(s) failed:\n${failed.map((f) => `${f.filename}: ${f.reason}`).join("\n")}`);
-      }
-      if (messages.length > 0) setError(messages.join("\n\n"));
-    } finally {
+      setJobId(data.jobId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
-      setProgress(null);
       setBlock(false);
-      abortControllerRef.current = null;
     }
   }
+
+  const results = job?.items.filter((i) => i.status === "done") ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -197,14 +211,13 @@ export function UploadClient() {
               }
 
               setFiles(valid);
-              setResults(null);
+              setJob(null);
+              setJobId(null);
               setError(rejections.length > 0 ? rejections.join("\n") : null);
             }}
             className="border border-neutral-300 rounded px-3 py-2"
           />
-          {files.length > 0 && (
-            <p className="text-sm text-neutral-500">{files.length} file(s) selected</p>
-          )}
+          {files.length > 0 && <p className="text-sm text-neutral-500">{files.length} file(s) selected</p>}
         </div>
 
         <div className="flex items-center gap-3">
@@ -224,12 +237,16 @@ export function UploadClient() {
               Cancel
             </button>
           )}
-          {progress && (
+          {job && (
             <div className="flex flex-col gap-1">
               <span className="text-sm text-neutral-500">
-                Busy with file {progress.current} of {progress.total}
+                {job.status === "processing"
+                  ? `Busy with file ${Math.min(job.processedFiles + 1, job.totalFiles)} of ${job.totalFiles}`
+                  : job.status === "cancelled"
+                    ? `Cancelled after ${job.processedFiles} of ${job.totalFiles} file(s)`
+                    : `Done - ${job.processedFiles} of ${job.totalFiles} file(s)`}
               </span>
-              <ProgressBar value={progress.current / progress.total} className="max-w-xs" />
+              <ProgressBar value={job.totalFiles > 0 ? job.processedFiles / job.totalFiles : 0} className="max-w-xs" />
             </div>
           )}
         </div>
@@ -237,11 +254,11 @@ export function UploadClient() {
 
       {error && <p className="text-red-600 text-sm whitespace-pre-line">{error}</p>}
 
-      {results && (
+      {results.length > 0 && (
         <div className="flex flex-col gap-2">
           <h2 className="font-medium">Results</h2>
 
-          {results.some((r) => r.status === "pending_confirmation") && (
+          {results.some((r) => r.resultStatus === "pending_confirmation") && (
             <Link
               href="/review"
               className="bg-blue-50 border border-blue-200 text-blue-800 rounded px-3 py-2 text-sm hover:bg-blue-100"
@@ -252,25 +269,23 @@ export function UploadClient() {
 
           <ul className="flex flex-col gap-2">
             {results.map((r, i) => (
-              <li
-                key={i}
-                className="border border-neutral-200 rounded px-3 py-2 flex items-center justify-between gap-3 text-sm"
-              >
-                <span className="truncate flex-1">{r.filename.split("/").pop()}</span>
+              <li key={i} className="border border-neutral-200 rounded px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate flex-1">{r.filename}</span>
                 <span className="text-neutral-500">{r.categoryKey}</span>
-                <span className="text-neutral-500">{Math.round(r.confidence * 100)}%</span>
-                {r.status === "pending_confirmation" || r.status === "needs_review" || r.status === "error" ? (
-                  <Link
-                    href="/review"
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.status]} hover:underline`}
-                  >
-                    {STATUS_LABELS[r.status]}
-                  </Link>
-                ) : (
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.status]}`}>
-                    {STATUS_LABELS[r.status]}
-                  </span>
-                )}
+                <span className="text-neutral-500">{r.confidence !== null ? `${Math.round(r.confidence * 100)}%` : ""}</span>
+                {r.resultStatus &&
+                  (r.resultStatus === "pending_confirmation" || r.resultStatus === "needs_review" || r.resultStatus === "error" ? (
+                    <Link
+                      href="/review"
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.resultStatus]} hover:underline`}
+                    >
+                      {STATUS_LABELS[r.resultStatus]}
+                    </Link>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.resultStatus]}`}>
+                      {STATUS_LABELS[r.resultStatus]}
+                    </span>
+                  ))}
               </li>
             ))}
           </ul>

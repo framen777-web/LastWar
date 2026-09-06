@@ -39,7 +39,12 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
 
   const valueRule = new Map(categories.map((c) => [c.key, pickNumberFormat(growthRows.map((r) => r.values[c.key]))]));
   const gainRule = new Map(
-    categories.filter((c) => c.cumulative).map((c) => [c.key, pickNumberFormat(growthRows.map((r) => r.gains[c.key]))])
+    categories
+      .filter((c) => c.cumulative)
+      .map((c) => [
+        c.key,
+        pickNumberFormat(growthRows.map((r) => (typeof r.gains[c.key] === "number" ? (r.gains[c.key] as number) : undefined))),
+      ])
   );
 
   const rows: DataTableRow[] = [...growthRows].reverse().map((r) => {
@@ -56,13 +61,15 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
         cells[`${c.key}__gain`] =
           gain === undefined ? (
             <span className="text-neutral-400">—</span>
+          ) : gain === "new" ? (
+            <span className="text-blue-600 text-xs font-medium">New</span>
           ) : (
             <span className={gain >= 0 ? "text-green-600" : "text-red-600"}>
               {gain >= 0 ? "+" : ""}
               {formatWithRule(gain, gainRule.get(c.key)!)}
             </span>
           );
-        if (gain !== undefined) sortValues[`${c.key}__gain`] = gain;
+        if (typeof gain === "number") sortValues[`${c.key}__gain`] = gain;
       }
     }
 

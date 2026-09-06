@@ -5,8 +5,14 @@ export type GrowthRow = {
   week: number;
   /** categoryKey -> this week's stored value. */
   values: Record<string, number | undefined>;
-  /** categoryKey -> gain since the member's own previous reading - cumulative categories only. */
-  gains: Record<string, number | undefined>;
+  /**
+   * categoryKey -> gain since the member's own previous reading (cumulative categories
+   * only). "new" means this is the earliest week this member has ANY reading for that
+   * specific category - there's no prior baseline to diff against, so the raw value (a
+   * lifetime running total, e.g. Kills) must never be shown as if it were earned in this
+   * one week. undefined means no reading at all this week.
+   */
+  gains: Record<string, number | "new" | undefined>;
 };
 
 export type MemberGrowthData = {
@@ -43,13 +49,24 @@ export async function getMemberGrowthData(memberId: number): Promise<MemberGrowt
 
   const rows: GrowthRow[] = weekNumbers.map((week, idx) => {
     const values: Record<string, number | undefined> = {};
-    const gains: Record<string, number | undefined> = {};
+    const gains: Record<string, number | "new" | undefined> = {};
     for (const c of categories) {
       const value = valueByWeekCategory.get(`${week}:${c.key}`);
       values[c.key] = value;
-      if (c.cumulative && idx > 0) {
-        const prev = valueByWeekCategory.get(`${weekNumbers[idx - 1]}:${c.key}`);
-        if (value !== undefined && prev !== undefined) gains[c.key] = value - prev;
+      if (c.cumulative && value !== undefined) {
+        // Walk back to the nearest earlier week that actually has a reading for THIS
+        // category - not just the member's immediately-preceding week overall, since a
+        // member can skip a week for one category while still having other categories
+        // recorded that week.
+        let prev: number | undefined;
+        for (let j = idx - 1; j >= 0; j--) {
+          const candidate = valueByWeekCategory.get(`${weekNumbers[j]}:${c.key}`);
+          if (candidate !== undefined) {
+            prev = candidate;
+            break;
+          }
+        }
+        gains[c.key] = prev === undefined ? "new" : value - prev;
       }
     }
     return { week, values, gains };
