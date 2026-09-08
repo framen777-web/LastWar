@@ -83,6 +83,12 @@ export async function POST(request: Request) {
       conductorPointsPerUnit: conductorMode === "rate" ? (body.conductorPointsPerUnit ?? null) : null,
       conductorUnitSize: conductorMode === "rate" ? (body.conductorUnitSize ?? null) : null,
       conductorFlatValue: conductorMode === "flat" ? (body.conductorFlatValue ?? null) : null,
+      verificationMode:
+        body.shape === "free_text"
+          ? "off"
+          : body.shape === "roster" && body.verificationMode !== "per_member"
+            ? "off"
+            : (body.verificationMode ?? "off"),
     },
   });
 

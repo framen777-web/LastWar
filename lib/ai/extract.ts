@@ -3,14 +3,15 @@ import { buildExtractionPrompt, getExtractionSchema, type CategoryForPrompt } fr
 import { resolveSquadMember, type RawSquadValue } from "./resolveSquadValues";
 
 export type RankingRow = {
-  rank: number;
+  rank?: number;
   member_name: string;
   value: number;
   alliance_rank?: string;
   alliance_tag?: string;
+  winner?: string;
 };
 
-export type RankingListResult = { event_date?: string; rows: RankingRow[] };
+export type RankingListResult = { event_date?: string; winner?: string; rows: RankingRow[] };
 
 export type RosterResult = {
   members: Array<{

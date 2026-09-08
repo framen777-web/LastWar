@@ -38,6 +38,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
     conductorPointsPerUnit: patch.conductorPointsPerUnit !== undefined ? patch.conductorPointsPerUnit : existing.conductorPointsPerUnit,
     conductorUnitSize: patch.conductorUnitSize !== undefined ? patch.conductorUnitSize : existing.conductorUnitSize,
     conductorFlatValue: patch.conductorFlatValue !== undefined ? patch.conductorFlatValue : existing.conductorFlatValue,
+    verificationMode: patch.verificationMode ?? existing.verificationMode,
   };
 
   const errors = validateCategoryInput(merged);
@@ -77,6 +78,11 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
       conductorPointsPerUnit: conductorMode === "rate" ? (merged.conductorPointsPerUnit ?? null) : null,
       conductorUnitSize: conductorMode === "rate" ? (merged.conductorUnitSize ?? null) : null,
       conductorFlatValue: conductorMode === "flat" ? (merged.conductorFlatValue ?? null) : null,
+      verificationMode: isFreeText
+        ? "off"
+        : merged.shape === "roster" && merged.verificationMode !== "per_member"
+          ? "off"
+          : (merged.verificationMode ?? "off"),
     },
   });
 

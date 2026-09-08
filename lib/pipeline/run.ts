@@ -5,7 +5,7 @@ import { CONFIDENCE_THRESHOLD } from "@/lib/ai/prompts";
 import type { Category } from "@/lib/generated/prisma/client";
 import { matchMember } from "./matchMember";
 
-export type PipelineStatus = "committed" | "needs_review" | "pending_confirmation" | "error";
+export type PipelineStatus = "committed" | "needs_review" | "pending_confirmation" | "pending_verification" | "error";
 
 export type PipelineResult = {
   filename: string;
@@ -45,6 +45,31 @@ export async function runPipelineForImage(params: {
   if (!category || !category.active) {
     await createNeedsReview(params.filename, categoryKey, params.weekNumber, confidence);
     return { filename: params.filename, categoryKey, confidence, status: "needs_review" };
+  }
+
+  if (category.verificationMode !== "off") {
+    try {
+      const extracted = await extract(category, imageBase64, params.mimeType);
+      await prisma.rawExtraction.create({
+        data: {
+          imageFilename: params.filename,
+          categoryKey,
+          weekNumber: params.weekNumber,
+          rawJson: JSON.stringify(extracted),
+          confidence,
+          status: "pending_verification",
+        },
+      });
+      await prisma.importBatch.upsert({
+        where: { categoryKey_weekNumber: { categoryKey, weekNumber: params.weekNumber } },
+        update: {},
+        create: { categoryKey, weekNumber: params.weekNumber },
+      });
+      return { filename: params.filename, categoryKey, confidence, status: "pending_verification" };
+    } catch (err) {
+      await createNeedsReview(params.filename, categoryKey, params.weekNumber, confidence);
+      return { filename: params.filename, categoryKey, confidence, status: "error", message: describeError(err) };
+    }
   }
 
   try {
@@ -93,7 +118,7 @@ async function createNeedsReview(filename: string, categoryKey: string, weekNumb
   });
 }
 
-async function writeExtraction(
+export async function writeExtraction(
   category: Category,
   extracted: RankingListResult | RosterResult | FreeTextResult,
   weekNumber: number
@@ -148,15 +173,16 @@ async function writeExtraction(
   }
 
   if (category.shape === "ranking_list") {
-    const { rows, event_date } = extracted as RankingListResult;
+    const { rows, event_date, winner } = extracted as RankingListResult;
     for (const row of rows) {
       const memberId = await matchMember(row.member_name);
       if (row.alliance_rank) await recordAllianceRank(memberId, weekNumber, row.alliance_rank);
+      const rowWinner = row.winner ?? winner; // per-row override - see extract.ts's RankingRow.winner note
       await writeCategoryRow(
         category,
         memberId,
         weekNumber,
-        { rank: row.rank, member_name: row.member_name, value: row.value, alliance_rank: row.alliance_rank, event_date },
+        { rank: row.rank, member_name: row.member_name, value: row.value, alliance_rank: row.alliance_rank, event_date, winner: rowWinner },
         row.rank
       );
     }

@@ -18,6 +18,7 @@ export type CategoryInput = {
   conductorPointsPerUnit?: number | null;
   conductorUnitSize?: number | null;
   conductorFlatValue?: number | null;
+  verificationMode?: string;
 };
 
 export type ValidationError = { field: string; message: string };
@@ -108,6 +109,19 @@ export function validateCategoryInput(input: CategoryInput): ValidationError[] {
     if (typeof input.conductorFlatValue !== "number" || !Number.isFinite(input.conductorFlatValue)) {
       errors.push({ field: "conductorFlatValue", message: "Flat point value is required for flat mode." });
     }
+  }
+
+  const VERIFICATION_MODES = ["off", "rank_single", "rank_multi_team", "per_member"];
+  if (input.verificationMode !== undefined && !VERIFICATION_MODES.includes(input.verificationMode)) {
+    errors.push({ field: "verificationMode", message: `Verification mode must be one of: ${VERIFICATION_MODES.join(", ")}.` });
+  }
+  if (isFreeText && input.verificationMode && input.verificationMode !== "off") {
+    errors.push({ field: "verificationMode", message: "Free-text categories already always hold for review - verification mode doesn't apply." });
+  }
+  // Roster shape (e.g. HQ) has no ranks to check, so only the shapeless per_member mode
+  // makes sense for it - rank_single/rank_multi_team stay ranking_list-only.
+  if (input.shape === "roster" && input.verificationMode && !["off", "per_member"].includes(input.verificationMode)) {
+    errors.push({ field: "verificationMode", message: "Roster categories only support 'per_member' verification (no ranks to check)." });
   }
 
   return errors;

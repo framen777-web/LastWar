@@ -17,6 +17,11 @@ export const SHAPE_FIELDS: Record<string, { key: string; label: string; numeric:
     { key: "value", label: "Value", numeric: true },
     { key: "alliance_rank", label: "Alliance rank (R1-R5)", numeric: false },
     { key: "event_date", label: "Event date (if printed on the screenshot)", numeric: false },
+    {
+      key: "winner",
+      label: "Team/winner label (if printed at the top of the screenshot - used to group multi-screenshot team results, e.g. Desert Storm)",
+      numeric: false,
+    },
   ],
   roster: [
     { key: "name", label: "Name", numeric: false },
@@ -70,6 +75,11 @@ const RANKING_LIST_SCHEMA = {
       type: "string",
       description:
         "Event date/timestamp printed on the screenshot, if there is one (e.g. near the bottom of a battle report). Omit if there is none.",
+    },
+    winner: {
+      type: "string",
+      description:
+        "A team or winner name/label printed at the TOP of this screenshot, if there is one (e.g. an event result screen showing which of two teams the ranking below belongs to). This is NOT the same as alliance_tag - it's a label for the whole screenshot, not something attached to any individual row. Omit entirely if no such label is visible.",
     },
     rows: {
       type: "array",
@@ -180,7 +190,7 @@ Report every numeric value the member gave, in "values", in the exact order they
 
   return `${intro}
 
-Extract every visible row/member exactly as shown. Read member names carefully (they may contain unusual characters/emoji — transcribe as best you can). Some names are followed immediately by a short word or short badge of text in a visibly smaller font (e.g. a player title) - that is part of what's displayed for that person, not decoration to skip; include it in "member_name"/"name" exactly as shown (with a single space before it), unless it's clearly the bracketed alliance tag described below, which is handled separately. Names in a non-Latin script (Arabic, Cyrillic, Chinese, etc.) must be copied exactly as they appear in that script — do not transliterate, romanize, or translate them into Latin letters. The same person's name has to come out character-for-character identical every time it's read, because it's used to automatically match this row to the right person across screenshots — even a different spelling or a switch to Latin letters will create a duplicate entry instead of updating theirs. Do not invent rows that aren't visible. If the "alliance_rank" (R1-R5) badge isn't visible for a member, omit that field for them rather than guessing. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — that bracketed tag is the alliance name, not part of the member's name; exclude it from "member_name"/"name" and report only the person's actual display name. Separately, also report that tag's text (without brackets) in "alliance_tag" if one was shown - e.g. "RUNE" - so a downstream check can tell who currently carries it. Omit "alliance_tag" entirely if the name had no bracket prefix.
+Extract every visible row/member exactly as shown. Read member names carefully (they may contain unusual characters/emoji — transcribe as best you can). Some names are followed immediately by a short word or short badge of text in a visibly smaller font (e.g. a player title) - that is part of what's displayed for that person, not decoration to skip; include it in "member_name"/"name" exactly as shown (with a single space before it), unless it's clearly the bracketed alliance tag described below, which is handled separately. Names in a non-Latin script (Arabic, Cyrillic, Chinese, etc.) must be copied exactly as they appear in that script — do not transliterate, romanize, or translate them into Latin letters. The same person's name has to come out character-for-character identical every time it's read, because it's used to automatically match this row to the right person across screenshots — even a different spelling or a switch to Latin letters will create a duplicate entry instead of updating theirs. Do not invent rows that aren't visible. If the "alliance_rank" (R1-R5) badge isn't visible for a member, omit that field for them rather than guessing. Member names are sometimes prefixed with the alliance's tag in brackets, e.g. "[RUNE] SomeName" — that bracketed tag is the alliance name, not part of the member's name; exclude it from "member_name"/"name" and report only the person's actual display name. Separately, also report that tag's text (without brackets) in "alliance_tag" if one was shown - e.g. "RUNE" - so a downstream check can tell who currently carries it. Omit "alliance_tag" entirely if the name had no bracket prefix. If a team or winner name is printed at the top of the screenshot itself (separate from any individual row), report it in "winner" - this is used to group several screenshots of the same team's results together, not treated as a per-row value.
 
 Numeric values are often abbreviated with a magnitude suffix — K (thousand), M (million), B (billion), G (also billion in some locales) — e.g. "89.5M" or "1.2B". Always expand these to the full number before reporting: "89.5M" = 89500000, "1.2B" = 1200000000. Never report just the leading digits without applying the suffix's multiplier.`;
 }

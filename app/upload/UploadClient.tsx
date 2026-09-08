@@ -10,7 +10,7 @@ const LEAVE_WARNING =
   "The import keeps running on the server even if you leave this page, switch to another app, or close your browser entirely - but you won't be able to see live progress or results here once you go. Check Review (or the dashboards) afterwards to see how it went. Leave anyway?";
 
 type ImportItemStatus = "queued" | "processing" | "done";
-type ResultStatus = "committed" | "needs_review" | "pending_confirmation" | "error";
+type ResultStatus = "committed" | "needs_review" | "pending_confirmation" | "error" | "pending_verification";
 
 type ImportItem = {
   filename: string;
@@ -34,6 +34,7 @@ const STATUS_STYLES: Record<ResultStatus, string> = {
   needs_review: "bg-amber-100 text-amber-800",
   pending_confirmation: "bg-blue-100 text-blue-800",
   error: "bg-red-100 text-red-800",
+  pending_verification: "bg-blue-100 text-blue-800",
 };
 
 const STATUS_LABELS: Record<ResultStatus, string> = {
@@ -41,6 +42,7 @@ const STATUS_LABELS: Record<ResultStatus, string> = {
   needs_review: "needs review — see Review",
   pending_confirmation: "needs your confirmation — see Review",
   error: "error — see Review",
+  pending_verification: "held for verification — see Verify",
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - a phone screenshot is a few MB at most
@@ -331,6 +333,13 @@ export function UploadClient() {
                   (r.resultStatus === "pending_confirmation" || r.resultStatus === "needs_review" || r.resultStatus === "error" ? (
                     <Link
                       href="/review"
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.resultStatus]} hover:underline`}
+                    >
+                      {STATUS_LABELS[r.resultStatus]}
+                    </Link>
+                  ) : r.resultStatus === "pending_verification" ? (
+                    <Link
+                      href={`/verify/${r.categoryKey}/${weekNumber}`}
                       className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[r.resultStatus]} hover:underline`}
                     >
                       {STATUS_LABELS[r.resultStatus]}

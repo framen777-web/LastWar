@@ -158,6 +158,7 @@ const MENU_ITEMS = [
     parentKey: "home-uploads",
   },
   { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"], parentKey: "home-uploads" },
+  { key: "uploads-verify-imports", label: "Verify Imports", href: "/verify", roles: ["ADMIN"], parentKey: "home-uploads" },
 
   {
     key: "dashboards-individual",

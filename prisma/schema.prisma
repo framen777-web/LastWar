@@ -72,6 +72,19 @@ model Category {
   dedupField   String?
   storedFields String   @default("[]")
   valueField   String   @default("value")
+
+  // "off" (default - commits immediately on extraction, exactly as before) | "rank_single"
+  // (one continuous ranking, e.g. Alliance Exercise - validates max rank found against
+  // total members extracted; ranking_list shape only) | "rank_multi_team" (multiple teams
+  // in one ranking, screenshots grouped by the "winner" label printed at the top of each
+  // one, e.g. Desert Storm/Canyon Storm - validates the sum of each team's max rank against
+  // total members extracted; ranking_list shape only) | "per_member" (every roster member
+  // should have exactly one value, e.g. Kills/VS/Donations/HQ - validates the count of
+  // members found against an expected count; works for ranking_list OR roster shape). Any
+  // mode other than "off" holds every extraction for this category+week in an ImportBatch
+  // instead of writing immediately - see lib/verify/.
+  verificationMode String @default("off")
+
   active       Boolean  @default(true)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
@@ -163,6 +176,43 @@ model RawExtraction {
   confidence    Float
   status        String   @default("pending")
   createdAt     DateTime @default(now())
+
+  @@index([categoryKey, weekNumber, status])
+}
+
+// Tracks the "hold for balance review" state for one category+week's ranking_list import,
+// for a category whose verificationMode isn't "off" (see Category.verificationMode above).
+// One row per (categoryKey, weekNumber) that's currently pending or has been committed
+// through this flow - never created at all for a verificationMode "off" category, which
+// keeps committing immediately exactly as before this feature existed.
+model ImportBatch {
+  id                   Int       @id @default(autoincrement())
+  categoryKey          String
+  weekNumber           Int
+  status               String    @default("pending") // "pending" | "committed"
+  varianceAcknowledged Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  committedAt          DateTime?
+
+  manualEntries ImportBatchManualEntry[]
+
+  @@unique([categoryKey, weekNumber])
+}
+
+// A member added by hand from the Verify screen's "Add missing" step, rather than
+// extracted from a screenshot - kept separate from RawExtraction (which is always "what
+// the AI actually read off an image") so a manual entry's origin stays visible, and one
+// can be individually deleted/undone without touching any real screenshot's data.
+model ImportBatchManualEntry {
+  id            Int         @id @default(autoincrement())
+  importBatchId Int
+  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id])
+  team          String?     // the screenshot's "winner" label - rank_multi_team mode only
+  memberName    String
+  rank          Int?        // rank_single / rank_multi_team modes
+  value         Float?      // per_member mode - the score itself
+  createdAt     DateTime    @default(now())
 }
 
 // One row per browser-initiated "Upload & process" submission. Exists so the actual
