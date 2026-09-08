@@ -59,6 +59,11 @@ async function uploadFilesToJob(files: File[], jobId: number): Promise<{ filenam
       const file = queue.shift();
       if (!file) return;
       try {
+        // Blob's own pathname collision avoidance (addRandomSuffix) is configured
+        // server-side in /api/import/blob-upload's onBeforeGenerateToken, not here - phones
+        // commonly reuse filenames like "1000150435.jpg" across screenshots, and Blob
+        // otherwise refuses to overwrite an existing pathname. The original name is
+        // preserved separately below as `filename` for display either way.
         const blob = await upload(file.name, file, {
           access: "public",
           handleUploadUrl: "/api/import/blob-upload",

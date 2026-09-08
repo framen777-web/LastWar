@@ -18,6 +18,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async () => ({
         allowedContentTypes: ALLOWED_MIME_TYPES,
         maximumSizeInBytes: MAX_FILE_SIZE,
+        // Phones commonly reuse filenames (e.g. "1000150435.jpg") across different
+        // screenshots, and Blob otherwise refuses to write a pathname that already exists -
+        // this is what actually avoids the collision, not anything on the client's upload()
+        // call (that version of the SDK doesn't accept addRandomSuffix as a client option).
+        addRandomSuffix: true,
       }),
     });
     return NextResponse.json(jsonResponse);
