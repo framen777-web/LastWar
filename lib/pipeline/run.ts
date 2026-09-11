@@ -50,6 +50,22 @@ export async function runPipelineForImage(params: {
   if (category.verificationMode !== "off") {
     try {
       const extracted = await extract(category, imageBase64, params.mimeType);
+
+      // A new screenshot for a category+week that was already committed means "add this to
+      // what I already committed" - reopen the batch by putting its earlier screenshots
+      // back in the verification pool too, not just this new one, so the reopened batch's
+      // balance-check reflects the whole week again. writeExtraction()'s per-member upserts
+      // make re-writing already-committed rows a safe no-op at the next commit.
+      const existingBatch = await prisma.importBatch.findUnique({
+        where: { categoryKey_weekNumber: { categoryKey, weekNumber: params.weekNumber } },
+      });
+      if (existingBatch?.status === "committed") {
+        await prisma.rawExtraction.updateMany({
+          where: { categoryKey, weekNumber: params.weekNumber, status: "committed" },
+          data: { status: "pending_verification" },
+        });
+      }
+
       await prisma.rawExtraction.create({
         data: {
           imageFilename: params.filename,
@@ -62,7 +78,7 @@ export async function runPipelineForImage(params: {
       });
       await prisma.importBatch.upsert({
         where: { categoryKey_weekNumber: { categoryKey, weekNumber: params.weekNumber } },
-        update: {},
+        update: { status: "pending", committedAt: null, varianceAcknowledged: false },
         create: { categoryKey, weekNumber: params.weekNumber },
       });
       return { filename: params.filename, categoryKey, confidence, status: "pending_verification" };

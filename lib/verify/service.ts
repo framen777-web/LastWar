@@ -40,7 +40,7 @@ export async function getBatchDetail(categoryKey: string, weekNumber: number): P
   if (!category || category.verificationMode === "off") return null;
 
   const batch = await prisma.importBatch.findUnique({ where: { categoryKey_weekNumber: { categoryKey, weekNumber } }, include: { manualEntries: true } });
-  if (!batch) return null;
+  if (!batch || batch.status !== "pending") return null;
 
   const rows = await loadMergedRows(category, weekNumber, batch.manualEntries);
   const validation = await validateBatch(category.verificationMode as "rank_single" | "rank_multi_team" | "per_member", categoryKey, weekNumber, rows);
