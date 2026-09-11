@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/dal";
-import { getBatchDetail, addManualEntry } from "@/lib/verify/service";
+import { getBatchDetail, addManualEntry, cancelBatch } from "@/lib/verify/service";
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/verify/[categoryKey]/[weekNumber]">) {
   const gate = await requireAdminApi();
@@ -26,5 +26,18 @@ export async function POST(request: Request, ctx: RouteContext<"/api/verify/[cat
     rank: body.rank ?? null,
     value: body.value ?? null,
   });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(_request: Request, ctx: RouteContext<"/api/verify/[categoryKey]/[weekNumber]">) {
+  const gate = await requireAdminApi();
+  if ("error" in gate) return gate.error;
+
+  const { categoryKey, weekNumber } = await ctx.params;
+  try {
+    await cancelBatch(categoryKey, Number(weekNumber));
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+  }
   return NextResponse.json({ ok: true });
 }

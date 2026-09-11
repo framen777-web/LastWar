@@ -108,6 +108,27 @@ export function VerifyDetailClient({ categoryKey, weekNumber }: { categoryKey: s
     }
   }
 
+  async function handleCancel() {
+    if (
+      !confirm(
+        "Cancel this batch? Every screenshot uploaded so far for this category/week will be discarded, not committed - you'd need to re-upload if you want it back."
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/verify/${categoryKey}/${weekNumber}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't cancel this batch.");
+      router.push("/verify");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  }
+
   if (loading) return <p className="text-neutral-500 text-sm">Loading…</p>;
   if (!batch) return <p className="text-neutral-500 text-sm">Batch not found - it may already be committed.</p>;
 
@@ -186,6 +207,13 @@ export function VerifyDetailClient({ categoryKey, weekNumber }: { categoryKey: s
         )}
         <button onClick={() => setShowDetails((s) => !s)} className="border border-neutral-300 rounded px-4 py-2 text-sm">
           {showDetails ? "Hide details" : "View details"}
+        </button>
+        <button
+          onClick={handleCancel}
+          disabled={busy}
+          className="border border-red-300 text-red-700 rounded px-4 py-2 text-sm disabled:opacity-50 hover:bg-red-50"
+        >
+          Cancel batch
         </button>
       </div>
 

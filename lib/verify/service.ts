@@ -170,3 +170,21 @@ export async function commitBatch(categoryKey: string, weekNumber: number, ackno
     }),
   ]);
 }
+
+/**
+ * Cancels a pending batch outright - discards every screenshot held for this category+week
+ * (marked "rejected", never written) and deletes the batch itself, rather than committing
+ * anything. A later screenshot for the same category+week starts a brand new batch from
+ * scratch. Doesn't touch the underlying image in Blob storage - same as
+ * rejectRawExtraction() elsewhere, only the tracking record is marked rejected.
+ */
+export async function cancelBatch(categoryKey: string, weekNumber: number): Promise<void> {
+  const batch = await prisma.importBatch.findUnique({ where: { categoryKey_weekNumber: { categoryKey, weekNumber } } });
+  if (!batch || batch.status !== "pending") throw new Error("No pending batch found for this category/week.");
+
+  await prisma.$transaction([
+    prisma.rawExtraction.updateMany({ where: { categoryKey, weekNumber, status: "pending_verification" }, data: { status: "rejected" } }),
+    prisma.importBatchManualEntry.deleteMany({ where: { importBatchId: batch.id } }),
+    prisma.importBatch.delete({ where: { id: batch.id } }),
+  ]);
+}
