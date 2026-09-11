@@ -14,6 +14,7 @@ type User = {
   effectiveRole: Role;
   hasPassword: boolean;
   isActive: boolean;
+  activeOverride: boolean | null;
   nameConfirmed: boolean;
   loginAlias: string | null;
   everHadCompletedWeek: boolean;
@@ -25,6 +26,12 @@ export function UsersClient() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  type SortKey = "name" | "allianceRank" | "role" | "active";
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [roleFilter, setRoleFilter] = useState<Role | "">("");
+  const [rankFilter, setRankFilter] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"" | "active" | "inactive" | "new">("");
   const [passwordDrafts, setPasswordDrafts] = useState<Record<number, string>>({});
   const [aliasDrafts, setAliasDrafts] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -71,7 +78,11 @@ export function UsersClient() {
           if (u.id !== id) return u;
           const updated = { ...u };
           if ("nameConfirmed" in body) updated.nameConfirmed = body.nameConfirmed as boolean;
-          if ("isActive" in body) updated.isActive = body.isActive as boolean;
+          if ("isActive" in body) {
+            updated.isActive = body.isActive as boolean;
+            updated.activeOverride = body.isActive as boolean; // server sets these together - see the PATCH route
+          }
+          if ("activeOverride" in body) updated.activeOverride = body.activeOverride as boolean | null;
           if ("password" in body) updated.hasPassword = true;
           if ("role" in body) {
             updated.roleOverride = body.role as Role | null;
@@ -103,7 +114,56 @@ export function UsersClient() {
     setBusyId(null);
   }
 
-  const filtered = users.filter((u) => u.name.toLowerCase().includes(filter.toLowerCase()));
+  const distinctRanks = [...new Set(users.map((u) => u.allianceRank).filter((r): r is string => !!r))].sort();
+
+  function isNew(u: User): boolean {
+    return u.effectiveRole === "MEMBER" && !u.everHadCompletedWeek;
+  }
+
+  const filtered = users
+    .filter((u) => u.name.toLowerCase().includes(filter.toLowerCase()))
+    .filter((u) => !roleFilter || u.effectiveRole === roleFilter)
+    .filter((u) => !rankFilter || u.allianceRank === rankFilter)
+    .filter((u) => {
+      if (!activeFilter) return true;
+      if (activeFilter === "new") return isNew(u);
+      if (activeFilter === "active") return u.isActive;
+      return !u.isActive && !isNew(u); // "Inactive" excludes "New" - matches the 3-way meaning the caption already uses
+    });
+
+  function sortValue(u: User): string | number {
+    switch (sortKey) {
+      case "name":
+        return u.name.toLowerCase();
+      case "allianceRank":
+        return u.allianceRank ?? "";
+      case "role":
+        return u.effectiveRole;
+      case "active":
+        return u.isActive ? 1 : 0;
+    }
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    const av = sortValue(a);
+    const bv = sortValue(b);
+    const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function sortArrow(key: SortKey) {
+    if (sortKey !== key) return null;
+    return <span className="ml-1 text-neutral-400">{sortDir === "asc" ? "▲" : "▼"}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -144,16 +204,67 @@ export function UsersClient() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-neutral-300 text-left">
-                <th className="py-2 pr-3">Name</th>
-                <th className="py-2 pr-3">Rank</th>
-                <th className="py-2 pr-3">Role</th>
+                <th className="py-2 pr-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                  Name{sortArrow("name")}
+                </th>
+                <th className="py-2 pr-3 cursor-pointer select-none" onClick={() => toggleSort("allianceRank")}>
+                  Rank{sortArrow("allianceRank")}
+                </th>
+                <th className="py-2 pr-3 cursor-pointer select-none" onClick={() => toggleSort("role")}>
+                  Role{sortArrow("role")}
+                </th>
                 <th className="py-2 pr-3">Login</th>
                 <th className="py-2 pr-3">Alias</th>
-                <th className="py-2 pr-3">Active</th>
+                <th className="py-2 pr-3 cursor-pointer select-none" onClick={() => toggleSort("active")}>
+                  Active{sortArrow("active")}
+                </th>
+              </tr>
+              <tr className="border-b border-neutral-200 text-left">
+                <th className="py-1 pr-3 font-normal" />
+                <th className="py-1 pr-3 font-normal">
+                  <select
+                    value={rankFilter}
+                    onChange={(e) => setRankFilter(e.target.value)}
+                    className="border border-neutral-300 rounded px-1.5 py-1 text-xs w-full"
+                  >
+                    <option value="">All ranks</option>
+                    {distinctRanks.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </th>
+                <th className="py-1 pr-3 font-normal">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value as Role | "")}
+                    className="border border-neutral-300 rounded px-1.5 py-1 text-xs w-full"
+                  >
+                    <option value="">All roles</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="LEADER">Leader</option>
+                    <option value="MEMBER">Member</option>
+                  </select>
+                </th>
+                <th className="py-1 pr-3 font-normal" />
+                <th className="py-1 pr-3 font-normal" />
+                <th className="py-1 pr-3 font-normal">
+                  <select
+                    value={activeFilter}
+                    onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
+                    className="border border-neutral-300 rounded px-1.5 py-1 text-xs w-full"
+                  >
+                    <option value="">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="new">New</option>
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
+              {sorted.map((u) => (
                 <tr key={u.id} className={`border-b border-neutral-100 ${!u.isActive && u.everHadCompletedWeek ? "opacity-50" : ""}`}>
                   <td className="py-2 pr-3 font-medium whitespace-nowrap">
                     {u.name}
@@ -260,30 +371,7 @@ export function UsersClient() {
                     </div>
                   </td>
                   <td className="py-2 pr-3">
-                    {u.effectiveRole === "MEMBER" ? (
-                      u.isActive ? (
-                        <span
-                          title="Auto-managed from last completed week's stats"
-                          className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800"
-                        >
-                          Active
-                        </span>
-                      ) : u.everHadCompletedWeek ? (
-                        <span
-                          title="Auto-managed from last completed week's stats"
-                          className="text-xs px-2 py-0.5 rounded bg-neutral-100 text-neutral-500"
-                        >
-                          Inactive
-                        </span>
-                      ) : (
-                        <span
-                          title="No completed week of stats yet - too new to judge"
-                          className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800"
-                        >
-                          New
-                        </span>
-                      )
-                    ) : (
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => patchUser(u.id, { isActive: !u.isActive })}
                         disabled={busyId === u.id}
@@ -294,7 +382,25 @@ export function UsersClient() {
                           className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${u.isActive ? "translate-x-4" : "translate-x-0.5"}`}
                         />
                       </button>
-                    )}
+                      {u.effectiveRole === "MEMBER" &&
+                        (u.activeOverride !== null ? (
+                          <button
+                            onClick={() => patchUser(u.id, { activeOverride: null })}
+                            disabled={busyId === u.id}
+                            className="text-xs text-blue-600 hover:underline disabled:opacity-50 whitespace-nowrap"
+                            title="Manually set - click to hand this back to automatic weekly-stat tracking"
+                          >
+                            manual · reset to auto
+                          </button>
+                        ) : (
+                          <span
+                            className="text-xs text-neutral-400"
+                            title="Auto-managed from last completed week's stats"
+                          >
+                            {u.everHadCompletedWeek ? "auto" : "new"}
+                          </span>
+                        ))}
+                    </div>
                   </td>
                 </tr>
               ))}

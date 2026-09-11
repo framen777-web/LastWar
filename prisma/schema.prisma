@@ -31,6 +31,13 @@ model Member {
   passwordHash String?
   role         String?
   isActive     Boolean @default(true)
+  // Manual override for isActive - null (default, every existing row) means auto-managed by
+  // syncMemberActiveStatus() exactly as before this field existed; true/false means an admin
+  // explicitly set it via Setup -> Users' Active toggle, and sync now skips this member
+  // entirely until it's reset back to null ("reset to auto" on that same screen). Mirrors the
+  // existing Member.role override pattern (see lib/auth/roles.ts). Admin/Leader rows are
+  // never auto-managed regardless of this value - see syncMemberActiveStatus().
+  activeOverride Boolean?
   theme        String  @default("default")
 
   // false = auto-created by the screenshot pipeline and not yet reviewed by an

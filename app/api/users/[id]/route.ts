@@ -24,6 +24,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     password?: string;
     role?: string | null;
     isActive?: boolean;
+    activeOverride?: null;
     nameConfirmed?: boolean;
     loginAlias?: string | null;
     name?: string;
@@ -34,6 +35,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     passwordHash?: string;
     role?: string | null;
     isActive?: boolean;
+    activeOverride?: boolean | null;
     nameConfirmed?: boolean;
     loginAlias?: string | null;
     name?: string;
@@ -57,6 +59,16 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
 
   if (body.isActive !== undefined) {
     data.isActive = body.isActive;
+    // Any explicit isActive write (from this toggle, for any role) is a manual decision -
+    // record it so syncMemberActiveStatus() stops recomputing this member. See Change 1/2.
+    data.activeOverride = body.isActive;
+  }
+
+  if (body.activeOverride === null) {
+    // "Reset to auto" - isActive itself is left exactly as it is right now; the very next
+    // sync run corrects it if needed, which happens immediately since GET /api/users calls
+    // syncMemberActiveStatus() before it reads any member back out.
+    data.activeOverride = null;
   }
 
   if (typeof body.nameConfirmed === "boolean") data.nameConfirmed = body.nameConfirmed;

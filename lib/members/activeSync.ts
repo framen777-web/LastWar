@@ -32,7 +32,7 @@ export async function syncMemberActiveStatus(): Promise<{ lastCompletedWeek: num
   const everHadHistory = await getMemberIdsWithHistoryThroughWeek(lastCompletedWeek);
 
   const members = await prisma.member.findMany({
-    select: { id: true, role: true, allianceRank: true, isActive: true },
+    select: { id: true, role: true, allianceRank: true, isActive: true, activeOverride: true },
   });
 
   // Batched into at most two updateMany calls instead of one awaited update() per drifted
@@ -43,6 +43,7 @@ export async function syncMemberActiveStatus(): Promise<{ lastCompletedWeek: num
   const toDeactivate: number[] = [];
   for (const m of members) {
     if (effectiveRole(m) !== "MEMBER") continue;
+    if (m.activeOverride !== null) continue; // manually set via Setup -> Users - leave alone until reset to auto
     if (!everHadHistory.has(m.id)) continue;
     const shouldBeActive = activeIds.has(m.id);
     if (m.isActive === shouldBeActive) continue;

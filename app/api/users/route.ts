@@ -58,6 +58,7 @@ export async function GET() {
         hasPassword,
         canLogIn: hasPassword || (role !== "ADMIN" && generalPasswordSet),
         isActive: m.isActive,
+        activeOverride: m.activeOverride,
         nameConfirmed: m.nameConfirmed,
         loginAlias: m.loginAlias,
         recentlyActive: recentlyActiveIds.has(m.id),
