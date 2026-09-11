@@ -5,8 +5,10 @@ import { effectiveRole } from "@/lib/auth/roles";
 import { getGeneralPassword } from "@/lib/settings";
 import { syncMemberActiveStatus } from "@/lib/members/activeSync";
 import { getActiveMemberIdsForWeek, getMemberIdsWithHistoryThroughWeek } from "@/lib/members/weekActivity";
+import { bestMatchExcluding } from "@/lib/pipeline/matchMemberCore";
 
 const RECENT_WEEKS = 3;
+const SUGGESTION_SIMILARITY_FLOOR = 0.6; // below this, not worth surfacing - too likely noise
 
 export async function GET() {
   const gate = await requireAdminApi();
@@ -46,6 +48,7 @@ export async function GET() {
     users: members.map((m) => {
       const role = effectiveRole(m);
       const hasPassword = !!m.passwordHash;
+      const suggestedMerge = !m.nameConfirmed ? suggestClosestMatch(m, members) : null;
       return {
         id: m.id,
         name: m.name,
@@ -59,7 +62,17 @@ export async function GET() {
         loginAlias: m.loginAlias,
         recentlyActive: recentlyActiveIds.has(m.id),
         everHadCompletedWeek: everHadCompletedWeekIds.has(m.id),
+        suggestedMerge,
       };
     }),
   });
+}
+
+function suggestClosestMatch(
+  member: { id: number; name: string },
+  members: { id: number; name: string; aliases: string }[]
+): { id: number; name: string; similarity: number } | null {
+  const match = bestMatchExcluding(member.name, member.id, members);
+  if (!match || match.similarity < SUGGESTION_SIMILARITY_FLOOR) return null;
+  return { id: match.id, name: match.name, similarity: Math.round(match.similarity * 100) };
 }

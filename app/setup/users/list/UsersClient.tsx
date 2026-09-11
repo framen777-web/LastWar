@@ -18,6 +18,7 @@ type User = {
   loginAlias: string | null;
   everHadCompletedWeek: boolean;
   canLogIn: boolean;
+  suggestedMerge: { id: number; name: string; similarity: number } | null;
 };
 
 export function UsersClient() {
@@ -175,6 +176,15 @@ export function UsersClient() {
                         >
                           Reject
                         </button>
+                        {u.suggestedMerge && (
+                          <Link
+                            href={`/setup/users/merge?keep=${u.suggestedMerge.id}&merge=${u.id}`}
+                            className="ml-2 text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                            title={`${u.suggestedMerge.similarity}% similar`}
+                          >
+                            Looks like &quot;{u.suggestedMerge.name}&quot;? Merge →
+                          </Link>
+                        )}
                       </>
                     )}
                   </td>

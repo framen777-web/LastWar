@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProgressBar } from "@/components/ProgressBar";
 
 type User = { id: number; name: string; recentlyActive: boolean };
@@ -25,6 +26,7 @@ type MergeResult = {
 };
 
 export function MergeClient() {
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [keepId, setKeepId] = useState<number | "">("");
@@ -50,6 +52,20 @@ export function MergeClient() {
   useEffect(() => {
     load();
   }, []);
+
+  // Deferred into a microtask (rather than calling setKeepId/setMergeId directly in the
+  // effect body) so the state updates read as reacting to an external change - the roster
+  // finishing its load - instead of setting state synchronously on render, same pattern
+  // used for the batch-detail fetch in VerifyDetailClient.tsx.
+  useEffect(() => {
+    if (users.length === 0) return;
+    Promise.resolve().then(() => {
+      const keepParam = Number(searchParams.get("keep"));
+      const mergeParam = Number(searchParams.get("merge"));
+      if (Number.isInteger(keepParam) && users.some((u) => u.id === keepParam)) setKeepId(keepParam);
+      if (Number.isInteger(mergeParam) && users.some((u) => u.id === mergeParam)) setMergeId(mergeParam);
+    });
+  }, [users, searchParams]);
 
   const sorted = [...users].sort((a, b) => a.name.localeCompare(b.name));
   const recent = sorted.filter((u) => u.recentlyActive);
