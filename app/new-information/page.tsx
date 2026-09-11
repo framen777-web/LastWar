@@ -5,6 +5,7 @@ import { getMenuAccessMap, canSeeMenuItem, requireMenuAccess } from "@/lib/menuA
 export default async function NewInformationPage() {
   const user = await requireMenuAccess("home-uploads");
   const pendingCount = user.role === "ADMIN" ? await prisma.rawExtraction.count({ where: { status: "pending_confirmation" } }) : 0;
+  const pendingVerificationCount = user.role === "ADMIN" ? await prisma.importBatch.count({ where: { status: "pending" } }) : 0;
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 
@@ -50,6 +51,20 @@ export default async function NewInformationPage() {
             icon="🚩"
             accentKey="uploads-flagged-errors"
             index={3}
+          />
+        )}
+        {visible("uploads-verify-imports") && (
+          <MenuButton
+            href="/verify"
+            label="Verify Imports"
+            description={
+              pendingVerificationCount > 0
+                ? `${pendingVerificationCount} batch(es) waiting for balance review`
+                : "Balance-check ranking/roster imports before they commit"
+            }
+            icon="⚖️"
+            accentKey="uploads-verify-imports"
+            index={4}
           />
         )}
       </div>
