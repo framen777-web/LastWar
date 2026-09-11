@@ -27,6 +27,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
     nameConfirmed?: boolean;
     loginAlias?: string | null;
     name?: string;
+    addAlias?: string;
+    removeAlias?: string;
   };
   const data: {
     passwordHash?: string;
@@ -85,6 +87,39 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/users/[id]
       data.name = newName;
       data.aliases = existingAliases.join(",");
     }
+  }
+
+  // These are the OCR name-matching aliases (Member.aliases - see lib/pipeline/matchMemberCore.ts),
+  // not the loginAlias handled above. Built off data.aliases if the rename block above already
+  // touched it (defensive - the UI never sends a rename and an add/remove in the same request),
+  // otherwise off the member's current list.
+  if (typeof body.addAlias === "string" || typeof body.removeAlias === "string") {
+    const aliasList = (data.aliases ?? current.aliases ?? "")
+      .split(",")
+      .map((a) => a.trim())
+      .filter(Boolean);
+
+    if (typeof body.addAlias === "string") {
+      const newAlias = body.addAlias.trim();
+      if (!newAlias) {
+        return NextResponse.json({ error: "Alias cannot be empty." }, { status: 400 });
+      }
+      if (newAlias.length > 60) {
+        return NextResponse.json({ error: "Alias must be 60 characters or fewer." }, { status: 400 });
+      }
+      const known = [current.name, ...aliasList];
+      if (!known.some((k) => k.toLowerCase() === newAlias.toLowerCase())) {
+        aliasList.push(newAlias);
+      }
+    }
+
+    if (typeof body.removeAlias === "string") {
+      const target = body.removeAlias.trim().toLowerCase();
+      const idx = aliasList.findIndex((a) => a.toLowerCase() === target);
+      if (idx !== -1) aliasList.splice(idx, 1);
+    }
+
+    data.aliases = aliasList.join(", ");
   }
 
   // Guardrail: never leave zero active admins (mirrors spec §11 "Last admin").

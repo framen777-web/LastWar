@@ -63,6 +63,9 @@ export async function GET() {
         recentlyActive: recentlyActiveIds.has(m.id),
         everHadCompletedWeek: everHadCompletedWeekIds.has(m.id),
         suggestedMerge,
+        aliases: m.aliases
+          ? m.aliases.split(",").map((a) => a.trim()).filter(Boolean)
+          : [],
       };
     }),
   });

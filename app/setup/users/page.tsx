@@ -30,6 +30,16 @@ export default async function UsersHubPage() {
             index={1}
           />
         )}
+        {visible("users-aliases") && (
+          <MenuButton
+            href="/setup/users/aliases"
+            label="Aliases"
+            description="View, add, and remove the confirmed name variants imports match against"
+            icon="🏷️"
+            accentKey="users-aliases"
+            index={2}
+          />
+        )}
         {visible("users-menu-access") && (
           <MenuButton
             href="/setup/users/menu-access"
@@ -37,7 +47,7 @@ export default async function UsersHubPage() {
             description="Which roles can see each menu button"
             icon="🔐"
             accentKey="users-menu-access"
-            index={2}
+            index={3}
           />
         )}
       </div>

@@ -272,6 +272,7 @@ const MENU_ITEMS = [
   { key: "settings-users", label: "Users", href: "/setup/users", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "users-list", label: "Users", href: "/setup/users/list", roles: ["ADMIN"], parentKey: "settings-users" },
   { key: "users-merge", label: "Merge", href: "/setup/users/merge", roles: ["ADMIN"], parentKey: "settings-users" },
+  { key: "users-aliases", label: "Aliases", href: "/setup/users/aliases", roles: ["ADMIN"], parentKey: "settings-users" },
   { key: "users-menu-access", label: "Menu Access", href: "/setup/users/menu-access", roles: ["ADMIN"], parentKey: "settings-users" },
   { key: "settings-categories", label: "Categories", href: "/setup/categories", roles: ["ADMIN"], parentKey: "home-settings" },
   { key: "settings-mvp-weighting", label: "MVP Weighting", href: "/setup/mvp-weights", roles: ["ADMIN"], parentKey: "home-settings" },
