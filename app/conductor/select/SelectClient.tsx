@@ -91,12 +91,12 @@ export function SelectClient({
     }
   }
 
-  // Every PATCH edits exactly one slot and returns exactly that slot, so apply it directly
-  // instead of following it up with a separate GET - that second round-trip could land its
-  // own (slightly older) snapshot after the PATCH's, visually reverting the edit that was
-  // just made. Nothing cascades to other slots anymore, so this is always a single-slot patch.
-  function applyPatchedSlot(slot: DraftSlot) {
-    setSlots((prev) => prev.map((s) => (s.slotIndex === slot.slotIndex && s.role === slot.role ? slot : s)));
+  // Every PATCH now recomputes and returns the full round's slots (collision included) in one
+  // response, not just the one slot that was edited - so a duplicate/collision flag on another
+  // slot clears (or appears) immediately, without a second round-trip whose own GET could land
+  // a slightly older snapshot after the PATCH's and visually revert the edit just made.
+  function applyRefreshedSlots(newSlots: DraftSlot[]) {
+    setSlots(newSlots);
   }
 
   async function submitSlotPatch(slot: DraftSlot, body: Record<string, unknown>) {
@@ -111,8 +111,8 @@ export function SelectClient({
     const data = await res.json();
     if (!res.ok) {
       setError(data.error ?? "Failed to update slot.");
-    } else if (data.slot) {
-      applyPatchedSlot(data.slot);
+    } else if (data.slots) {
+      applyRefreshedSlots(data.slots);
     }
     setPendingSlot(null);
   }

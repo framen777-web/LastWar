@@ -23,7 +23,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/conductor/
   if (body.role === "passenger" && body.reroll === true) {
     const result = await rerollPassengerSlot(Number(id), body.slotIndex);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
-    return NextResponse.json({ slot: result.slot });
+    return NextResponse.json({ slots: result.slots });
   }
 
   if (body.memberId === undefined && body.sourceRank === undefined && body.sourceCategoryKey === undefined) {
@@ -37,5 +37,5 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/conductor/
   });
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
-  return NextResponse.json({ slot: result.slot });
+  return NextResponse.json({ slots: result.slots });
 }

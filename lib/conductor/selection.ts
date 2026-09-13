@@ -127,6 +127,55 @@ function unresolvedReason(role: "conductor" | "passenger", sourceCategoryKey: st
   return "No eligible member available for Random.";
 }
 
+/**
+ * Builds the full DraftSlot list for a set of selections, with collision recomputed against
+ * every other selection in the same set - shared by getRoundSlots() (full round fetch) and by
+ * overrideSlot()/rerollPassengerSlot() (a single-slot edit) so an edit that resolves or
+ * creates a collision is reflected on every affected slot immediately, not just the one that
+ * was actually changed.
+ */
+function buildDraftSlots(
+  selections: {
+    slotIndex: number;
+    weekNumber: number;
+    role: string;
+    memberId: number | null;
+    pointsAtSelection: number | null;
+    sourceCategoryKey: string | null;
+    sourceRank: number | null;
+    manualOverride: boolean;
+  }[],
+  memberNameById: Map<number, string>,
+  allowDuplicatePassengers: boolean
+): DraftSlot[] {
+  return selections
+    .map((s) => {
+      const { collision, collisionReason } =
+        s.memberId === null
+          ? { collision: true, collisionReason: unresolvedReason(s.role as "conductor" | "passenger", s.sourceCategoryKey, s.sourceRank) }
+          : detectRoundCollision(
+              { slotIndex: s.slotIndex, role: s.role as "conductor" | "passenger", memberId: s.memberId },
+              selections,
+              allowDuplicatePassengers
+            );
+      return {
+        slotIndex: s.slotIndex,
+        weekday: weekdayForSlot(s.slotIndex),
+        weekNumber: s.weekNumber,
+        role: s.role as "conductor" | "passenger",
+        memberId: s.memberId,
+        memberName: s.memberId !== null ? (memberNameById.get(s.memberId) ?? null) : null,
+        pointsAtSelection: s.pointsAtSelection,
+        sourceCategoryKey: s.sourceCategoryKey,
+        sourceRank: s.sourceRank,
+        manualOverride: s.manualOverride,
+        collision,
+        collisionReason,
+      };
+    })
+    .sort((a, b) => a.slotIndex - b.slotIndex || a.role.localeCompare(b.role));
+}
+
 async function loadContext(startWeek: number, slotCount: number) {
   const [settings, standings, categoryValues, members] = await Promise.all([
     getConductorSettings(),
@@ -341,32 +390,7 @@ export async function getRoundSlots(roundId: number): Promise<{ round: { id: num
   const [members, settings] = await Promise.all([prisma.member.findMany(), getConductorSettings()]);
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
 
-  const slots: DraftSlot[] = round.selections
-    .map((s) => {
-      const { collision, collisionReason } =
-        s.memberId === null
-          ? { collision: true, collisionReason: unresolvedReason(s.role as "conductor" | "passenger", s.sourceCategoryKey, s.sourceRank) }
-          : detectRoundCollision(
-              { slotIndex: s.slotIndex, role: s.role as "conductor" | "passenger", memberId: s.memberId },
-              round.selections,
-              settings.allowDuplicatePassengers
-            );
-      return {
-        slotIndex: s.slotIndex,
-        weekday: weekdayForSlot(s.slotIndex),
-        weekNumber: s.weekNumber,
-        role: s.role as "conductor" | "passenger",
-        memberId: s.memberId,
-        memberName: s.memberId !== null ? (memberNameById.get(s.memberId) ?? null) : null,
-        pointsAtSelection: s.pointsAtSelection,
-        sourceCategoryKey: s.sourceCategoryKey,
-        sourceRank: s.sourceRank,
-        manualOverride: s.manualOverride,
-        collision,
-        collisionReason,
-      };
-    })
-    .sort((a, b) => a.slotIndex - b.slotIndex || a.role.localeCompare(b.role));
+  const slots = buildDraftSlots(round.selections, memberNameById, settings.allowDuplicatePassengers);
 
   return { round: { id: round.id, weeksInCycle: round.weeksInCycle, startWeek: round.startWeek, status: round.status }, slots };
 }
@@ -377,7 +401,7 @@ export async function overrideSlot(
   slotIndex: number,
   role: "conductor" | "passenger",
   input: { memberId?: number; sourceRank?: number; sourceCategoryKey?: string | null }
-): Promise<{ ok: true; slot: DraftSlot } | { ok: false; error: string }> {
+): Promise<{ ok: true; slots: DraftSlot[] } | { ok: false; error: string }> {
   const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
   if (!round) return { ok: false, error: "Round not found." };
   if (round.status !== "draft") return { ok: false, error: "Only draft rounds can be edited." };
@@ -385,11 +409,15 @@ export async function overrideSlot(
   const existing = round.selections.find((s) => s.slotIndex === slotIndex && s.role === role);
   if (!existing) return { ok: false, error: "Slot not found." };
 
-  const [members, settings] = await Promise.all([
+  const [members, allMembers, settings] = await Promise.all([
     prisma.member.findMany({ where: { isActive: true } }),
+    // Separate from `members` (active-only, used for eligibility below) - buildDraftSlots()
+    // now resolves a name for every slot in the round, not just this one, and a slot elsewhere
+    // in the round can reference a member who's since gone inactive.
+    prisma.member.findMany(),
     getConductorSettings(),
   ]);
-  const memberNameById = new Map(members.map((m) => [m.id, m.name]));
+  const memberNameById = new Map(allMembers.map((m) => [m.id, m.name]));
 
   let memberId: number | null = existing.memberId;
   let pointsAtSelection: number | null = existing.pointsAtSelection;
@@ -449,39 +477,16 @@ export async function overrideSlot(
   });
 
   const otherSelections = round.selections.map((s) => (s.id === updated.id ? updated : s));
-  const { collision, collisionReason } =
-    updated.memberId === null
-      ? { collision: true, collisionReason: unresolvedReason(updated.role as "conductor" | "passenger", updated.sourceCategoryKey, updated.sourceRank) }
-      : detectRoundCollision(
-          { slotIndex: updated.slotIndex, role: updated.role as "conductor" | "passenger", memberId: updated.memberId },
-          otherSelections,
-          settings.allowDuplicatePassengers
-        );
+  const slots = buildDraftSlots(otherSelections, memberNameById, settings.allowDuplicatePassengers);
 
-  return {
-    ok: true,
-    slot: {
-      slotIndex: updated.slotIndex,
-      weekday: weekdayForSlot(updated.slotIndex),
-      weekNumber: updated.weekNumber,
-      role: updated.role as "conductor" | "passenger",
-      memberId: updated.memberId,
-      memberName: updated.memberId !== null ? (memberNameById.get(updated.memberId) ?? null) : null,
-      pointsAtSelection: updated.pointsAtSelection,
-      sourceCategoryKey: updated.sourceCategoryKey,
-      sourceRank: updated.sourceRank,
-      manualOverride: updated.manualOverride,
-      collision,
-      collisionReason,
-    },
-  };
+  return { ok: true, slots };
 }
 
 /** Re-randomizes one Random-rule Passenger slot only, leaving every other slot in the round untouched. */
 export async function rerollPassengerSlot(
   roundId: number,
   slotIndex: number
-): Promise<{ ok: true; slot: DraftSlot } | { ok: false; error: string }> {
+): Promise<{ ok: true; slots: DraftSlot[] } | { ok: false; error: string }> {
   const round = await prisma.conductorRound.findUnique({ where: { id: roundId }, include: { selections: true } });
   if (!round) return { ok: false, error: "Round not found." };
   if (round.status !== "draft") return { ok: false, error: "Only draft rounds can be edited." };
@@ -490,12 +495,16 @@ export async function rerollPassengerSlot(
   if (!existing) return { ok: false, error: "Slot not found." };
   if (existing.sourceCategoryKey) return { ok: false, error: "Only Random slots can be rerolled - this one is field-based." };
 
-  const [settings, members, weekActiveIds] = await Promise.all([
+  const [settings, members, allMembers, weekActiveIds] = await Promise.all([
     getConductorSettings(),
     prisma.member.findMany({ where: { isActive: true } }),
+    // Separate from `members` (active-only, used for eligibility below) - buildDraftSlots()
+    // now resolves a name for every slot in the round, not just this one, and a slot elsewhere
+    // in the round can reference a member who's since gone inactive.
+    prisma.member.findMany(),
     getActiveMemberIdsForWeekWithFallback(existing.weekNumber),
   ]);
-  const memberNameById = new Map(members.map((m) => [m.id, m.name]));
+  const memberNameById = new Map(allMembers.map((m) => [m.id, m.name]));
 
   const conductorSlot = round.selections.find((s) => s.slotIndex === slotIndex && s.role === "conductor");
   const usedElsewhere = new Set(
@@ -519,23 +528,10 @@ export async function rerollPassengerSlot(
     data: { memberId, manualOverride: true },
   });
 
-  return {
-    ok: true,
-    slot: {
-      slotIndex: updated.slotIndex,
-      weekday: weekdayForSlot(updated.slotIndex),
-      weekNumber: updated.weekNumber,
-      role: "passenger",
-      memberId: updated.memberId,
-      memberName: updated.memberId !== null ? (memberNameById.get(updated.memberId) ?? null) : null,
-      pointsAtSelection: updated.pointsAtSelection,
-      sourceCategoryKey: updated.sourceCategoryKey,
-      sourceRank: updated.sourceRank,
-      manualOverride: updated.manualOverride,
-      collision: updated.memberId === null,
-      collisionReason: updated.memberId === null ? "No eligible member available for Random." : null,
-    },
-  };
+  const otherSelections = round.selections.map((s) => (s.id === updated.id ? updated : s));
+  const slots = buildDraftSlots(otherSelections, memberNameById, settings.allowDuplicatePassengers);
+
+  return { ok: true, slots };
 }
 
 /** Re-validates the hard rules against the round's current (possibly overridden) state, then finalizes it. */
