@@ -4,6 +4,7 @@ import type { RankingListResult, RosterResult, FreeTextResult } from "@/lib/ai/e
 import type { Category } from "@/lib/generated/prisma/client";
 import { mergeRows, mergeFreeTextRows, validateBatch, type MergedRow, type ScreenshotGroup, type BatchValidation } from "./validate";
 import { computeSquadIssues, type SquadIssue } from "./squadIssues";
+import { computeHqIssues, type HqIssue } from "./hqIssues";
 
 type ManualEntryInput = { team: string | null; memberName: string; rank: number | null; value: number | null; fields: string | null };
 
@@ -264,4 +265,34 @@ export async function acknowledgeIssue(categoryKey: string, weekNumber: number, 
 
 export async function unacknowledgeIssue(ackId: number): Promise<void> {
   await prisma.importBatchIssueAck.delete({ where: { id: ackId } });
+}
+
+// Whether committing this category+week should route through the HQ review step instead of
+// committing directly - roster shape + per_member mode + the HQ category specifically (key
+// check keeps this from silently applying to some future unrelated roster category that
+// wouldn't have a "level" concept at all).
+export function hasHqReviewStep(category: Pick<Category, "key" | "shape" | "verificationMode">): boolean {
+  return category.key === "members" && category.shape === "roster" && category.verificationMode === "per_member";
+}
+
+export type HqReview = { issues: HqIssue[]; acknowledged: { id: number; memberName: string; issueType: string }[] };
+
+export async function getHqReview(categoryKey: string, weekNumber: number): Promise<HqReview | null> {
+  const category = await prisma.category.findUnique({ where: { key: categoryKey } });
+  if (!category || !hasHqReviewStep(category)) return null;
+
+  const batch = await prisma.importBatch.findUnique({
+    where: { categoryKey_weekNumber: { categoryKey, weekNumber } },
+    include: { manualEntries: true, issueAcks: true },
+  });
+  if (!batch || batch.status !== "pending") return null;
+
+  const rows = await loadMergedRows(category, weekNumber, batch.manualEntries);
+  const allIssues = await computeHqIssues(category.id, weekNumber, rows);
+
+  const ackKey = (i: { memberName: string; issueType: string }) => `${i.memberName.toLowerCase()}:${i.issueType}`;
+  const acked = new Set(batch.issueAcks.map((a) => ackKey({ memberName: a.memberName, issueType: a.issueType })));
+  const issues = allIssues.filter((i) => !acked.has(ackKey({ memberName: i.memberName, issueType: i.type })));
+
+  return { issues, acknowledged: batch.issueAcks.map((a) => ({ id: a.id, memberName: a.memberName, issueType: a.issueType })) };
 }

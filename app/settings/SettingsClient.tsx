@@ -7,6 +7,7 @@ export function SettingsClient() {
   const [allianceTag, setAllianceTag] = useState("RUNE");
   const [minPasswordLength, setMinPasswordLength] = useState("8");
   const [r1BottomWeeksWindow, setR1BottomWeeksWindow] = useState("5");
+  const [hqMaxWeeklyIncrease, setHqMaxWeeklyIncrease] = useState("3");
   const [mvpSummaryMode, setMvpSummaryMode] = useState<SummaryMode>("sum");
   const [week1StartDate, setWeek1StartDate] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -24,6 +25,7 @@ export function SettingsClient() {
         setAllianceTag(data.settings?.allianceTag || "RUNE");
         setMinPasswordLength(data.settings?.minPasswordLength ?? "8");
         setR1BottomWeeksWindow(data.settings?.r1BottomWeeksWindow ?? "5");
+        setHqMaxWeeklyIncrease(data.settings?.hqMaxWeeklyIncrease ?? "3");
         setMvpSummaryMode((data.settings?.mvpSummaryMode as SummaryMode) ?? "sum");
         setWeek1StartDate(data.settings?.week1StartDate ?? "");
         setGeminiApiKeySet(!!data.geminiApiKeySet);
@@ -49,6 +51,7 @@ export function SettingsClient() {
       allianceTag: allianceTag.trim() || "RUNE",
       minPasswordLength: String(minLength),
       r1BottomWeeksWindow: String(Math.max(1, Number(r1BottomWeeksWindow) || 5)),
+      hqMaxWeeklyIncrease: String(Math.max(1, Number(hqMaxWeeklyIncrease) || 3)),
       mvpSummaryMode,
       week1StartDate,
       generalPassword,
@@ -135,6 +138,29 @@ export function SettingsClient() {
             Default averaging window for the R1 report&apos;s bottom panel. Only affects weeks that haven&apos;t
             been viewed yet - once a week&apos;s report has been generated, its own window is pinned and this
             default no longer affects it.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="hqMaxWeeklyIncrease" className="text-sm font-medium">
+            HQ level jump cap
+          </label>
+          <input
+            id="hqMaxWeeklyIncrease"
+            type="number"
+            min={1}
+            value={hqMaxWeeklyIncrease}
+            onChange={(e) => {
+              setHqMaxWeeklyIncrease(e.target.value);
+              setSaved(false);
+            }}
+            disabled={loading}
+            className="border border-neutral-300 rounded px-3 py-2 w-32"
+          />
+          <p className="text-neutral-500 text-xs">
+            Used by HQ import verification: a member&apos;s HQ level is flagged for review if it
+            increases by more than this many levels in one week. A level that drops at all from the
+            previous week is always flagged, regardless of this cap.
           </p>
         </div>
 

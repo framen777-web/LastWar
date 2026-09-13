@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireMenuAccess } from "@/lib/menuAccess";
-import { hasSquadReviewStep } from "@/lib/verify/service";
+import { hasSquadReviewStep, hasHqReviewStep } from "@/lib/verify/service";
 import { VerifyDetailClient } from "./VerifyDetailClient";
 
 export default async function VerifyDetailPage({ params }: PageProps<"/verify/[categoryKey]/[weekNumber]">) {
@@ -8,7 +8,7 @@ export default async function VerifyDetailPage({ params }: PageProps<"/verify/[c
   const { categoryKey, weekNumber } = await params;
 
   const category = await prisma.category.findUnique({ where: { key: categoryKey } });
-  const hasReviewStep = category ? hasSquadReviewStep(category) : false;
+  const hasReviewStep = category ? hasSquadReviewStep(category) || hasHqReviewStep(category) : false;
 
   return <VerifyDetailClient categoryKey={categoryKey} weekNumber={Number(weekNumber)} hasReviewStep={hasReviewStep} />;
 }
