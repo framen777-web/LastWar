@@ -12,7 +12,15 @@ type BatchValidation =
   | { mode: "per_member"; expectedTotal: number; extractedTotal: number; isBalanced: boolean; variance: number };
 type BatchDetail = { categoryKey: string; categoryName: string; weekNumber: number; validation: BatchValidation; rows: MergedRow[]; manualEntries: ManualEntry[] };
 
-export function VerifyDetailClient({ categoryKey, weekNumber }: { categoryKey: string; weekNumber: number }) {
+export function VerifyDetailClient({
+  categoryKey,
+  weekNumber,
+  hasReviewStep,
+}: {
+  categoryKey: string;
+  weekNumber: number;
+  hasReviewStep: boolean;
+}) {
   const router = useRouter();
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +96,27 @@ export function VerifyDetailClient({ categoryKey, weekNumber }: { categoryKey: s
     await fetch(`/api/verify/entries/${id}`, { method: "DELETE" });
     await load();
     setBusy(false);
+  }
+
+  async function handleCommitClick() {
+    if (!hasReviewStep) {
+      await handleCommit(false);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/verify/${categoryKey}/${weekNumber}/review`);
+      const data = res.ok ? await res.json() : null;
+      if (data?.review?.issues?.length > 0) {
+        router.push(`/verify/${categoryKey}/${weekNumber}/review`);
+        return;
+      }
+      await handleCommit(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
   }
 
   async function handleCommit(acknowledgeVariance: boolean) {
@@ -181,7 +210,7 @@ export function VerifyDetailClient({ categoryKey, weekNumber }: { categoryKey: s
       <div className="flex gap-2 flex-wrap">
         {v.isBalanced ? (
           <button
-            onClick={() => handleCommit(false)}
+            onClick={handleCommitClick}
             disabled={busy}
             className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
           >

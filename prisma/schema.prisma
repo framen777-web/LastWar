@@ -203,6 +203,7 @@ model ImportBatch {
   committedAt          DateTime?
 
   manualEntries ImportBatchManualEntry[]
+  issueAcks     ImportBatchIssueAck[]
 
   @@unique([categoryKey, weekNumber])
 }
@@ -218,8 +219,26 @@ model ImportBatchManualEntry {
   team          String?     // the screenshot's "winner" label - rank_multi_team mode only
   memberName    String
   rank          Int?        // rank_single / rank_multi_team modes
-  value         Float?      // per_member mode - the score itself
+  value         Float?      // per_member mode (ranking_list/roster) - the score itself
+  fields        String?     // per_member mode (free_text/Squads only) - JSON {air?,tank?,missile?,fourth?}
   createdAt     DateTime    @default(now())
+}
+
+// Tracks a manually-dismissed per-member data-quality flag on a pending ImportBatch (see
+// lib/verify/squadIssues.ts) - e.g. "this member genuinely didn't submit this week, don't
+// keep flagging it". Separate from ImportBatchManualEntry (which supplies/corrects actual
+// data) since dismissing a flag and providing data are different actions - a dismissed
+// "missing submission" flag has no value to attach. Deleted automatically when its batch is
+// cancelled or committed (see cancelBatch()/commitBatch() in lib/verify/service.ts).
+model ImportBatchIssueAck {
+  id            Int         @id @default(autoincrement())
+  importBatchId Int
+  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id])
+  memberName    String
+  issueType     String      // "few_squads" | "below_min" | "large_drop" | "missing_submission"
+  createdAt     DateTime    @default(now())
+
+  @@unique([importBatchId, memberName, issueType])
 }
 
 // One row per browser-initiated "Upload & process" submission. Exists so the actual

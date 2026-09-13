@@ -85,7 +85,9 @@ export async function POST(request: Request) {
       conductorFlatValue: conductorMode === "flat" ? (body.conductorFlatValue ?? null) : null,
       verificationMode:
         body.shape === "free_text"
-          ? "off"
+          ? body.verificationMode === "per_member"
+            ? "per_member"
+            : "off"
           : body.shape === "roster" && body.verificationMode !== "per_member"
             ? "off"
             : (body.verificationMode ?? "off"),

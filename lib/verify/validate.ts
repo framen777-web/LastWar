@@ -67,6 +67,54 @@ export function mergeRows(
   return [...byName.values()];
 }
 
+// Field-level merge for free_text (Squads) categories - unlike mergeRows() (a full-row
+// replace, correct for a category where one screenshot = one complete number per member),
+// a Squads member's air/tank/missile/fourth can arrive across separate screenshots/messages
+// read at different times. Each field independently keeps whichever source last reported
+// THAT field - an older screenshot's fields aren't wiped just because a newer one only
+// mentioned some of them. Manual entries (ImportBatchManualEntry.fields) are applied last
+// per field, same "manual always wins" rule as mergeRows().
+export function mergeFreeTextRows(
+  screenshots: { rows: { memberName: string; fields: Record<string, number | undefined> }[] }[],
+  manualEntries: { memberName: string; fields: Record<string, number | undefined> | null }[]
+): MergedRow[] {
+  const byName = new Map<string, { memberName: string; fields: Record<string, number | undefined> }>();
+
+  for (const shot of screenshots) {
+    for (const r of shot.rows) {
+      const key = r.memberName.trim().toLowerCase();
+      const existing = byName.get(key)?.fields ?? {};
+      const merged = { ...existing };
+      for (const [k, v] of Object.entries(r.fields)) {
+        if (v !== undefined) merged[k] = v; // only overwrite slots this read actually reported
+      }
+      byName.set(key, { memberName: r.memberName, fields: merged });
+    }
+  }
+
+  for (const m of manualEntries) {
+    if (!m.fields) continue;
+    const key = m.memberName.trim().toLowerCase();
+    const existing = byName.get(key)?.fields ?? {};
+    const merged = { ...existing };
+    for (const [k, v] of Object.entries(m.fields)) {
+      if (v !== undefined) merged[k] = v;
+    }
+    byName.set(key, { memberName: m.memberName, fields: merged });
+  }
+
+  return [...byName.values()].map((r) => ({
+    team: null,
+    memberName: r.memberName,
+    // Deliberately the count of resolved slots (0-4), not a troop number - it exists only
+    // so validateBatch()'s per_member counting (extracted rows with a defined value) keeps
+    // working unchanged for the main Verify screen's "Balanced"/"Variance" count, exactly as
+    // it does for every other per_member category. Value-quality lives in squadIssues.ts.
+    value: ["air", "tank", "missile", "fourth"].filter((k) => r.fields[k] !== undefined).length,
+    fields: r.fields,
+  }));
+}
+
 export async function validateBatch(
   mode: "rank_single" | "rank_multi_team" | "per_member",
   categoryKey: string,

@@ -5,7 +5,26 @@ const RANKING_LIST_FIELDS_WITH_DATE = [...RANKING_LIST_FIELDS, "event_date"];
 const ROSTER_FIELDS = ["name", "level", "status", "last_active", "alliance_rank"];
 const FREE_TEXT_FIELDS = ["member_name", "air", "tank", "missile", "fourth"];
 
-const CATEGORIES = [
+type CategorySeed = {
+  key: string;
+  name: string;
+  description: string;
+  shape: string;
+  divisor: number;
+  divisorLabel: string | null;
+  importMode: string;
+  dedupField: string | null;
+  storedFields: string[];
+  valueField: string;
+  sortOrder: number;
+  // Only set for categories whose verificationMode this seed run should actively enforce -
+  // omitted (undefined) for every other category, which preserves whatever's already in the
+  // DB (admin-set via Setup -> Categories) exactly as before this field existed. See main()'s
+  // upsert below.
+  verificationMode?: string;
+};
+
+const CATEGORIES: CategorySeed[] = [
   {
     key: "power",
     name: "Power",
@@ -116,6 +135,7 @@ const CATEGORIES = [
     dedupField: null,
     storedFields: FREE_TEXT_FIELDS,
     valueField: "",
+    verificationMode: "per_member",
     sortOrder: 7,
   },
 ];
@@ -159,6 +179,7 @@ const MENU_ITEMS = [
   },
   { key: "uploads-flagged-errors", label: "Flagged errors", href: "/review", roles: ["ADMIN"], parentKey: "home-uploads" },
   { key: "uploads-verify-imports", label: "Verify Imports", href: "/verify", roles: ["ADMIN"], parentKey: "home-uploads" },
+  { key: "uploads-squads-review", label: "Squads Review", href: "/verify/squads/review", roles: ["ADMIN"], parentKey: "home-uploads" },
 
   {
     key: "dashboards-individual",
@@ -308,6 +329,11 @@ async function main() {
       storedFields: JSON.stringify(category.storedFields),
       valueField: category.valueField,
       sortOrder: category.sortOrder,
+      // Deliberately omitted unless this seed entry sets it - every other category's
+      // verificationMode is admin-editable (Setup -> Categories) and must survive a reseed
+      // untouched. squads sets it explicitly so its per_member verification stays on even if
+      // it was ever pushed back to "off" directly in the DB.
+      ...(category.verificationMode !== undefined ? { verificationMode: category.verificationMode } : {}),
     };
     await prisma.category.upsert({
       where: { key: category.key },

@@ -79,7 +79,9 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
       conductorUnitSize: conductorMode === "rate" ? (merged.conductorUnitSize ?? null) : null,
       conductorFlatValue: conductorMode === "flat" ? (merged.conductorFlatValue ?? null) : null,
       verificationMode: isFreeText
-        ? "off"
+        ? merged.verificationMode === "per_member"
+          ? "per_member"
+          : "off"
         : merged.shape === "roster" && merged.verificationMode !== "per_member"
           ? "off"
           : (merged.verificationMode ?? "off"),

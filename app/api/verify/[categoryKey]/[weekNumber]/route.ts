@@ -17,7 +17,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/verify/[cat
   if ("error" in gate) return gate.error;
 
   const { categoryKey, weekNumber } = await ctx.params;
-  const body = (await request.json()) as { team?: string | null; memberName?: string; rank?: number | null; value?: number | null };
+  const body = (await request.json()) as {
+    team?: string | null;
+    memberName?: string;
+    rank?: number | null;
+    value?: number | null;
+    fields?: Record<string, number | undefined> | null;
+  };
   if (!body.memberName) return NextResponse.json({ error: "memberName is required." }, { status: 400 });
 
   await addManualEntry(categoryKey, Number(weekNumber), {
@@ -25,6 +31,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/verify/[cat
     memberName: body.memberName,
     rank: body.rank ?? null,
     value: body.value ?? null,
+    fields: body.fields ? JSON.stringify(body.fields) : null,
   });
   return NextResponse.json({ ok: true });
 }

@@ -165,7 +165,9 @@ export function CategoryForm({
       cumulative: isFreeText ? false : form.cumulative,
       summaryMode: isFreeText && !FREE_TEXT_SUMMARIZABLE_KEYS.has(editing?.key ?? "") ? "selected_week" : form.summaryMode,
       verificationMode: isFreeText
-        ? "off"
+        ? form.verificationMode === "per_member"
+          ? "per_member"
+          : "off"
         : form.shape === "roster" && form.verificationMode !== "per_member"
           ? "off"
           : form.verificationMode,
@@ -245,8 +247,9 @@ export function CategoryForm({
 
       {form.shape === "free_text" ? (
         <p className="text-neutral-500 text-xs bg-amber-50 border border-amber-200 rounded px-3 py-2">
-          Free-text categories don't roll up into a single dashboard value — every field is stored directly, and
-          every import is always held for manual review before it's written (never auto-committed).
+          Free-text categories don&apos;t roll up into a single dashboard value — every field is stored directly.
+          {form.verificationMode === "off" &&
+            " Every import is always held for manual review before it's written (never auto-committed)."}
         </p>
       ) : (
         <>
@@ -338,32 +341,34 @@ export function CategoryForm({
         </>
       )}
 
-      {form.shape !== "free_text" && (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium">Verification before commit</label>
-          <select
-            value={form.verificationMode}
-            onChange={(e) => setForm((f) => ({ ...f, verificationMode: e.target.value as FormState["verificationMode"] }))}
-            className="border border-neutral-300 rounded px-3 py-2"
-          >
-            <option value="off">Off - commit immediately, as today</option>
-            {form.shape === "ranking_list" && (
-              <>
-                <option value="rank_single">One continuous ranking (e.g. Alliance Exercise)</option>
-                <option value="rank_multi_team">Multiple teams in one ranking (e.g. Desert Storm)</option>
-              </>
-            )}
-            <option value="per_member">Every roster member should have a value (e.g. Kills, VS, Donations, HQ)</option>
-          </select>
-          {form.verificationMode !== "off" && (
-            <p className="text-neutral-500 text-xs bg-blue-50 border border-blue-200 rounded px-3 py-2">
-              Every import for this category is held at Verify until the member count
-              balances (or you commit it as-is) - nothing writes to the database
-              automatically anymore.
-            </p>
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium">Verification before commit</label>
+        <select
+          value={form.verificationMode}
+          onChange={(e) => setForm((f) => ({ ...f, verificationMode: e.target.value as FormState["verificationMode"] }))}
+          className="border border-neutral-300 rounded px-3 py-2"
+        >
+          <option value="off">Off - commit immediately, as today</option>
+          {form.shape === "ranking_list" && (
+            <>
+              <option value="rank_single">One continuous ranking (e.g. Alliance Exercise)</option>
+              <option value="rank_multi_team">Multiple teams in one ranking (e.g. Desert Storm)</option>
+            </>
           )}
-        </div>
-      )}
+          <option value="per_member">
+            {form.shape === "free_text"
+              ? "Every roster member should have a value (e.g. Squads)"
+              : "Every roster member should have a value (e.g. Kills, VS, Donations, HQ)"}
+          </option>
+        </select>
+        {form.verificationMode !== "off" && (
+          <p className="text-neutral-500 text-xs bg-blue-50 border border-blue-200 rounded px-3 py-2">
+            Every import for this category is held at Verify until the member count
+            balances (or you commit it as-is) - nothing writes to the database
+            automatically anymore.
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium">Fields to store</label>
