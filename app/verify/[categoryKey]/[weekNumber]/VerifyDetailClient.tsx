@@ -98,9 +98,17 @@ export function VerifyDetailClient({
     setBusy(false);
   }
 
-  async function handleCommitClick() {
+  // Gate for BOTH commit paths - the balanced "Commit" button and the count-variance
+  // "Commit as-is" button both need to check for open Squad Review issues first, since the
+  // count-based balance check (v.isBalanced) and the per-member value-quality check
+  // (squadIssues.ts) are independent concerns - a batch can fail one, the other, both, or
+  // neither. Missing this on "Commit as-is" was the original bug: a member-count variance
+  // routed straight to handleCommit(true) and skipped the review step entirely, so a batch
+  // with real flagged issues (large drops, below-floor values, missing submissions) could
+  // commit with zero visibility into them.
+  async function handleCommitClick(acknowledgeVariance: boolean) {
     if (!hasReviewStep) {
-      await handleCommit(false);
+      await handleCommit(acknowledgeVariance);
       return;
     }
     setBusy(true);
@@ -112,7 +120,7 @@ export function VerifyDetailClient({
         router.push(`/verify/${categoryKey}/${weekNumber}/review`);
         return;
       }
-      await handleCommit(false);
+      await handleCommit(acknowledgeVariance);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -210,7 +218,7 @@ export function VerifyDetailClient({
       <div className="flex gap-2 flex-wrap">
         {v.isBalanced ? (
           <button
-            onClick={handleCommitClick}
+            onClick={() => handleCommitClick(false)}
             disabled={busy}
             className="bg-accent text-accent-contrast rounded px-4 py-2 text-sm disabled:opacity-50"
           >
@@ -226,7 +234,7 @@ export function VerifyDetailClient({
               Edit missing
             </button>
             <button
-              onClick={() => handleCommit(true)}
+              onClick={() => handleCommitClick(true)}
               disabled={busy}
               className="border border-neutral-300 rounded px-4 py-2 text-sm disabled:opacity-50"
             >
