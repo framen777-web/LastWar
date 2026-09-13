@@ -6,6 +6,8 @@ export default async function NewInformationPage() {
   const user = await requireMenuAccess("home-uploads");
   const pendingCount = user.role === "ADMIN" ? await prisma.rawExtraction.count({ where: { status: "pending_confirmation" } }) : 0;
   const pendingVerificationCount = user.role === "ADMIN" ? await prisma.importBatch.count({ where: { status: "pending" } }) : 0;
+  const pendingSquadsReviewCount =
+    user.role === "ADMIN" ? await prisma.importBatch.count({ where: { categoryKey: "squads", status: "pending" } }) : 0;
   const access = await getMenuAccessMap();
   const visible = (key: string) => canSeeMenuItem(access, key, user.role);
 
@@ -65,6 +67,18 @@ export default async function NewInformationPage() {
             icon="⚖️"
             accentKey="uploads-verify-imports"
             index={4}
+          />
+        )}
+        {visible("uploads-squads-review") && (
+          <MenuButton
+            href="/verify/squads/review"
+            label="Squads Review"
+            description={
+              pendingSquadsReviewCount > 0 ? "Squad values flagged for a data-quality check" : "No pending Squads import to review"
+            }
+            icon="🛡️"
+            accentKey="uploads-squads-review"
+            index={5}
           />
         )}
       </div>
