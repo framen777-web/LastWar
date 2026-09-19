@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getConductorCategoryWeekValues } from "./stats";
 import { getConductorSettings } from "./settings";
 import { pointsForCategoryWeek, earnedPointsForWeek } from "./points";
+import { getActiveSaveWeeksMap } from "./saveWeeks";
 
 export type StatementCategoryDetail = {
   categoryKey: string;
@@ -32,7 +33,7 @@ export type ConductorStatement = {
  */
 export async function getConductorStatement(memberId: number): Promise<ConductorStatement> {
   const settings = await getConductorSettings();
-  const [categories, values, resets] = await Promise.all([
+  const [categories, values, resets, saveWeeks] = await Promise.all([
     prisma.category.findMany({ where: { active: true, conductorMode: { not: "off" } } }),
     getConductorCategoryWeekValues(),
     prisma.conductorSelection.findMany({
@@ -40,6 +41,7 @@ export async function getConductorStatement(memberId: number): Promise<Conductor
       include: { round: true },
       orderBy: { round: { startWeek: "asc" } },
     }),
+    getActiveSaveWeeksMap(),
   ]);
 
   let maxWeek = settings.fromWeek;
@@ -63,10 +65,11 @@ export async function getConductorStatement(memberId: number): Promise<Conductor
     const categoryDetails: StatementCategoryDetail[] = [];
     let weekPoints = 0;
 
+    const saveWeek = saveWeeks.get(week);
     for (const category of categories) {
       const cw = values.get(`${memberId}:${week}:${category.key}`);
       if (!cw?.present) continue;
-      const points = pointsForCategoryWeek(category, cw);
+      const points = pointsForCategoryWeek(category, cw, saveWeek);
       categoryDetails.push({
         categoryKey: category.key,
         categoryName: category.name,
@@ -153,7 +156,7 @@ export type WeeklyRank = { weekNumber: number; rank: number; totalMembers: numbe
  */
 export async function getConductorRankHistory(memberId: number): Promise<Map<number, WeeklyRank>> {
   const settings = await getConductorSettings();
-  const [members, categories, values, resets] = await Promise.all([
+  const [members, categories, values, resets, saveWeeks] = await Promise.all([
     prisma.member.findMany({ where: { isActive: true }, select: { id: true } }),
     prisma.category.findMany({ where: { active: true, conductorMode: { not: "off" } } }),
     getConductorCategoryWeekValues(),
@@ -161,6 +164,7 @@ export async function getConductorRankHistory(memberId: number): Promise<Map<num
       where: { role: "conductor", memberId: { not: null }, round: { status: "confirmed" } },
       select: { memberId: true, pointsAtSelection: true, round: { select: { startWeek: true } } },
     }),
+    getActiveSaveWeeksMap(),
   ]);
 
   let maxWeek = settings.fromWeek;
@@ -175,7 +179,7 @@ export async function getConductorRankHistory(memberId: number): Promise<Map<num
     const cumulative = new Array<number>(weekCount);
     let running = 0;
     for (let i = 0; i < weekCount; i++) {
-      running += earnedPointsForWeek(categories, values, member.id, settings.fromWeek + i);
+      running += earnedPointsForWeek(categories, values, member.id, settings.fromWeek + i, saveWeeks);
       cumulative[i] = running;
     }
     balanceByMember.set(member.id, cumulative);

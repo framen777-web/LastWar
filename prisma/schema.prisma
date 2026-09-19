@@ -117,7 +117,36 @@ model Category {
   conductorUnitSize      Float?
   conductorFlatValue     Float?
 
+  // How this category's Conductor points behave during an active Save Week (see the
+  // SaveWeek model) - "full" (default, unaffected, same as any normal week) | "zero" (0
+  // points for this category that week, regardless of the member's value) | "capped" (the
+  // raw stat value is clamped to that week's SaveWeek.capValues[key] BEFORE the rate/flat
+  // points math runs, so a member can't out-earn the capped-equivalent points even with a
+  // much higher real reading). Meaningless (never read) for a category with
+  // conductorMode "off".
+  saveWeekMode String @default("full")
+
   records CategoryRecord[]
+}
+
+// A week the alliance deliberately didn't push for a win (Desert Storm/VS wins are decided
+// by VS points, not effort) - if a member wins it anyway against that agreement, categories
+// set to "zero" or "capped" (Category.saveWeekMode) must not reward that for this week.
+// `endDate` is informational only (the Sunday of that week, for the admin's own reference) -
+// no points calculation reads it; `weekNumber` is what every calculation actually keys on.
+// `capValues` is a JSON object mapping a "capped"-mode category's key to that category's
+// raw-stat ceiling for THIS week only (e.g. {"vs": 70000000}) - deliberately per-week, not a
+// fixed per-category number, since the cap itself is set fresh each Save Week. An inactive
+// (toggled-off) row is kept, not deleted, so its cap values survive being re-enabled later,
+// but behaves as if it doesn't exist for every points calculation while inactive.
+model SaveWeek {
+  id         Int      @id @default(autoincrement())
+  weekNumber Int      @unique
+  endDate    DateTime
+  active     Boolean  @default(true)
+  capValues  String   @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Simple key/value app settings (e.g. WhatsApp share number), configured from Setup.

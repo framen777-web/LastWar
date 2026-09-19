@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/auth/dal";
+import { recalculateSelectionPoints } from "@/lib/conductor/points";
 
 export async function GET() {
   const gate = await requireAdminApi();
@@ -9,7 +10,15 @@ export async function GET() {
   const categories = await prisma.category.findMany({
     where: { active: true, shape: { not: "free_text" } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { key: true, name: true, conductorMode: true, conductorPointsPerUnit: true, conductorUnitSize: true, conductorFlatValue: true },
+    select: {
+      key: true,
+      name: true,
+      conductorMode: true,
+      conductorPointsPerUnit: true,
+      conductorUnitSize: true,
+      conductorFlatValue: true,
+      saveWeekMode: true,
+    },
   });
   return NextResponse.json({ categories });
 }
@@ -20,11 +29,15 @@ type CategoryPointsInput = {
   pointsPerUnit?: number | null;
   unitSize?: number | null;
   flatValue?: number | null;
+  saveWeekMode: string;
 };
 
-// Bulk edit of every rankable category's Conductor points in one save - same rate/flat/off
-// normalization app/api/categories/[id]/route.ts already applies to a single category, just
-// looped over the whole set instead of threaded through the Category edit panel one at a time.
+// Bulk edit of every rankable category's Conductor points (and Save Week mode) in one save -
+// same rate/flat/off normalization app/api/categories/[id]/route.ts already applies to a
+// single category, just looped over the whole set instead of threaded through the Category
+// edit panel one at a time. Always recalculates afterward - a saveWeekMode change here can
+// change how much a past week is now worth, and the firm rule is that ANY change to Save
+// Week configuration recalculates (see lib/conductor/points.ts's recalculateSelectionPoints).
 export async function PUT(request: Request) {
   const gate = await requireAdminApi();
   if ("error" in gate) return gate.error;
@@ -48,6 +61,9 @@ export async function PUT(request: Request) {
     if (item.mode === "flat" && (typeof item.flatValue !== "number" || !Number.isFinite(item.flatValue))) {
       return NextResponse.json({ error: `${item.categoryKey}: flat value is required for flat mode.` }, { status: 400 });
     }
+    if (!["full", "zero", "capped"].includes(item.saveWeekMode)) {
+      return NextResponse.json({ error: `${item.categoryKey}: Save Week mode must be 'full', 'zero', or 'capped'.` }, { status: 400 });
+    }
   }
 
   await prisma.$transaction(
@@ -59,15 +75,26 @@ export async function PUT(request: Request) {
           conductorPointsPerUnit: item.mode === "rate" ? (item.pointsPerUnit ?? null) : null,
           conductorUnitSize: item.mode === "rate" ? (item.unitSize ?? 1) : null,
           conductorFlatValue: item.mode === "flat" ? (item.flatValue ?? null) : null,
+          saveWeekMode: item.saveWeekMode,
         },
       })
     )
   );
 
+  await recalculateSelectionPoints();
+
   const categories = await prisma.category.findMany({
     where: { active: true, shape: { not: "free_text" } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { key: true, name: true, conductorMode: true, conductorPointsPerUnit: true, conductorUnitSize: true, conductorFlatValue: true },
+    select: {
+      key: true,
+      name: true,
+      conductorMode: true,
+      conductorPointsPerUnit: true,
+      conductorUnitSize: true,
+      conductorFlatValue: true,
+      saveWeekMode: true,
+    },
   });
   return NextResponse.json({ categories });
 }
