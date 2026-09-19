@@ -56,10 +56,21 @@ export async function runPipelineForImage(params: {
       // back in the verification pool too, not just this new one, so the reopened batch's
       // balance-check reflects the whole week again. writeExtraction()'s per-member upserts
       // make re-writing already-committed rows a safe no-op at the next commit.
+      //
+      // NOT for rank_multi_team (e.g. Desert Storm/Canyon Storm): there, "committed" means one
+      // team's results were confirmed as final, and a later screenshot for the same
+      // category+week is a genuinely separate team's import, not more of the same team's data.
+      // ImportBatch has no per-team dimension, so without this guard the reopen above would
+      // resurrect the already-committed team's rows into the new team's review batch and the
+      // Verify page would show both teams' totals added together under what looks like a
+      // single fresh import - reported as "imported more names than it actually did." A
+      // rank_multi_team category always starts a clean batch for a new screenshot after
+      // commit; correcting an already-committed team's own data is a separate, explicit action,
+      // not something a new upload should trigger automatically.
       const existingBatch = await prisma.importBatch.findUnique({
         where: { categoryKey_weekNumber: { categoryKey, weekNumber: params.weekNumber } },
       });
-      if (existingBatch?.status === "committed") {
+      if (existingBatch?.status === "committed" && category.verificationMode !== "rank_multi_team") {
         await prisma.rawExtraction.updateMany({
           where: { categoryKey, weekNumber: params.weekNumber, status: "committed" },
           data: { status: "pending_verification" },

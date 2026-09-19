@@ -72,9 +72,12 @@ async function loadMergedRows(
   weekNumber: number,
   manualEntries: ManualEntryInput[]
 ): Promise<MergedRow[]> {
-  const extractions = await prisma.rawExtraction.findMany({
-    where: { categoryKey: category.key, weekNumber, status: "pending_verification" },
-  });
+  const [extractions, members] = await Promise.all([
+    prisma.rawExtraction.findMany({
+      where: { categoryKey: category.key, weekNumber, status: "pending_verification" },
+    }),
+    prisma.member.findMany(),
+  ]);
 
   if (category.shape === "free_text") {
     const screenshots = extractions.map((ex) => {
@@ -88,7 +91,8 @@ async function loadMergedRows(
     });
     return mergeFreeTextRows(
       screenshots,
-      manualEntries.map((e) => ({ memberName: e.memberName, fields: e.fields ? JSON.parse(e.fields) : null }))
+      manualEntries.map((e) => ({ memberName: e.memberName, fields: e.fields ? JSON.parse(e.fields) : null })),
+      members
     );
   }
 
@@ -118,7 +122,7 @@ async function loadMergedRows(
     };
   });
 
-  return mergeRows(screenshots, manualEntries);
+  return mergeRows(screenshots, manualEntries, members);
 }
 
 export async function addManualEntry(

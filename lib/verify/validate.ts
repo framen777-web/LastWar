@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getRosterMemberIdsForWeeks } from "@/lib/reports/activeMembers";
+import { findMemberId, type MatchableMember } from "@/lib/pipeline/matchMemberCore";
 
 // The full per-member field bag straight from the screenshot's raw JSON (whatever keys
 // that shape happens to have - alliance_rank/alliance_tag for ranking_list, level/status/
@@ -33,12 +34,17 @@ export type BatchValidation =
 
 /**
  * Merges every pending screenshot's rows plus any manually-added entries into one
- * per-member list for this batch. Dedup key is the trimmed, lowercased name - this runs
- * BEFORE commit, so nothing has been fuzzy-matched to a real Member yet (that only happens
- * inside writeExtraction() at commit time). A name appearing more than once (a re-uploaded
- * or corrected screenshot, or a manual entry for a name a screenshot also found) resolves
- * to whichever source was processed last - manual entries are always applied last, so they
- * always win over a screenshot's own reading.
+ * per-member list for this batch. Dedup key is the resolved real Member identity (via
+ * findMemberId() against the roster) when a row's name matches someone, falling back to the
+ * trimmed/lowercased raw name only for someone who doesn't match any known Member yet (a
+ * genuinely new person). This runs BEFORE commit, so it's a read-only preview of the same
+ * identity resolution writeExtraction() does for real at commit time via matchMember() -
+ * without it, two screenshots reading the same person's name slightly differently (an
+ * alliance-tag prefix present in one crop but not another, stray whitespace, etc.) would
+ * wrongly count as two separate people on the review screen. A name appearing more than once
+ * (a re-uploaded or corrected screenshot, or a manual entry for a name a screenshot also
+ * found) resolves to whichever source was processed last - manual entries are always applied
+ * last, so they always win over a screenshot's own reading.
  *
  * Grouping is by SCREENSHOT, not by row: a screenshot's "winner" label (if any) applies to
  * every row it contains, because the winner label is printed once at the top of the image,
@@ -48,23 +54,25 @@ export type BatchValidation =
  */
 export function mergeRows(
   screenshots: ScreenshotGroup[],
-  manualEntries: { team: string | null; memberName: string; rank: number | null; value: number | null }[]
+  manualEntries: { team: string | null; memberName: string; rank: number | null; value: number | null }[],
+  members: MatchableMember[]
 ): MergedRow[] {
-  const byName = new Map<string, MergedRow>();
+  const byKey = new Map<string | number, MergedRow>();
+  const resolveKey = (rawName: string): string | number => findMemberId(rawName, members) ?? rawName.trim().toLowerCase();
 
   for (const shot of screenshots) {
     const team = shot.winner?.trim() || null;
     for (const r of shot.rows) {
-      const key = r.memberName.trim().toLowerCase();
-      byName.set(key, { team, memberName: r.memberName, rank: r.rank, value: r.value, fields: r.fields });
+      const key = resolveKey(r.memberName);
+      byKey.set(key, { team, memberName: r.memberName, rank: r.rank, value: r.value, fields: r.fields });
     }
   }
   for (const m of manualEntries) {
-    const key = m.memberName.trim().toLowerCase();
-    byName.set(key, { team: m.team, memberName: m.memberName, rank: m.rank ?? undefined, value: m.value ?? 0, fields: {} });
+    const key = resolveKey(m.memberName);
+    byKey.set(key, { team: m.team, memberName: m.memberName, rank: m.rank ?? undefined, value: m.value ?? 0, fields: {} });
   }
 
-  return [...byName.values()];
+  return [...byKey.values()];
 }
 
 // Field-level merge for free_text (Squads) categories - unlike mergeRows() (a full-row
@@ -73,37 +81,41 @@ export function mergeRows(
 // read at different times. Each field independently keeps whichever source last reported
 // THAT field - an older screenshot's fields aren't wiped just because a newer one only
 // mentioned some of them. Manual entries (ImportBatchManualEntry.fields) are applied last
-// per field, same "manual always wins" rule as mergeRows().
+// per field, same "manual always wins" rule as mergeRows(). Dedup key is the resolved real
+// Member identity (same findMemberId() fallback-to-raw-name rule as mergeRows()) so a name
+// read slightly differently across screenshots still lands on the same merged row.
 export function mergeFreeTextRows(
   screenshots: { rows: { memberName: string; fields: Record<string, number | undefined> }[] }[],
-  manualEntries: { memberName: string; fields: Record<string, number | undefined> | null }[]
+  manualEntries: { memberName: string; fields: Record<string, number | undefined> | null }[],
+  members: MatchableMember[]
 ): MergedRow[] {
-  const byName = new Map<string, { memberName: string; fields: Record<string, number | undefined> }>();
+  const byKey = new Map<string | number, { memberName: string; fields: Record<string, number | undefined> }>();
+  const resolveKey = (rawName: string): string | number => findMemberId(rawName, members) ?? rawName.trim().toLowerCase();
 
   for (const shot of screenshots) {
     for (const r of shot.rows) {
-      const key = r.memberName.trim().toLowerCase();
-      const existing = byName.get(key)?.fields ?? {};
+      const key = resolveKey(r.memberName);
+      const existing = byKey.get(key)?.fields ?? {};
       const merged = { ...existing };
       for (const [k, v] of Object.entries(r.fields)) {
         if (v !== undefined) merged[k] = v; // only overwrite slots this read actually reported
       }
-      byName.set(key, { memberName: r.memberName, fields: merged });
+      byKey.set(key, { memberName: r.memberName, fields: merged });
     }
   }
 
   for (const m of manualEntries) {
     if (!m.fields) continue;
-    const key = m.memberName.trim().toLowerCase();
-    const existing = byName.get(key)?.fields ?? {};
+    const key = resolveKey(m.memberName);
+    const existing = byKey.get(key)?.fields ?? {};
     const merged = { ...existing };
     for (const [k, v] of Object.entries(m.fields)) {
       if (v !== undefined) merged[k] = v;
     }
-    byName.set(key, { memberName: m.memberName, fields: merged });
+    byKey.set(key, { memberName: m.memberName, fields: merged });
   }
 
-  return [...byName.values()].map((r) => ({
+  return [...byKey.values()].map((r) => ({
     team: null,
     memberName: r.memberName,
     // Deliberately the count of resolved slots (0-4), not a troop number - it exists only
