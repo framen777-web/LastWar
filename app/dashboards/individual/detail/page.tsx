@@ -2,7 +2,7 @@ import { ZoomWrapper, ZoomProvider, ZoomControl } from "@/components/ZoomWrapper
 import { ShareReportButton } from "@/components/ShareReportButton";
 import { ExcelExportButton } from "@/components/ExcelExportButton";
 import { prisma } from "@/lib/db";
-import { requireMenuAccess } from "@/lib/menuAccess";
+import { requireMenuAccess, getMenuAccessMap, canSeeMenuItem } from "@/lib/menuAccess";
 import { DataTable, type DataTableColumn, type DataTableRow } from "@/components/DataTable";
 import { MobileCardList } from "@/components/MobileCardList";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
@@ -16,6 +16,11 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
   // via a crafted ?member= query param - the id is only ever taken from the param for
   // ADMIN/LEADER, who get the same "pick any member" access every other Alliance Report has.
   const canPickAnyMember = user.role === "ADMIN" || user.role === "LEADER";
+  // Same access check the destination page enforces (requireMenuAccess("users-merge")) -
+  // deliberately not hardcoded to "ADMIN" so this shortcut stays in sync if that role list is
+  // ever changed from Setup -> Menu Access, instead of ever showing a button that just
+  // redirects the person to "/" when clicked.
+  const canMerge = canSeeMenuItem(await getMenuAccessMap(), "users-merge", user.role);
   const memberParam = Array.isArray(params.member) ? params.member[0] : params.member;
   const selectedMemberId = canPickAnyMember && memberParam ? Number(memberParam) : user.id;
 
@@ -102,6 +107,42 @@ export default async function IndividualDetailListPage({ searchParams }: PagePro
             <p className="text-sm text-neutral-500">
               {member?.name} {member?.allianceRank ? `· ${member.allianceRank}` : ""}
             </p>
+          )}
+
+          {canMerge && allMembers.length > 1 && (
+            // Spotting an obvious duplicate is exactly what this page's Member dropdown is
+            // good for (every active member's name, side by side) - this jumps straight to
+            // the real Merge screen with both names already picked, instead of leaving here
+            // to re-find them from scratch in Setup -> Users -> Merge. No new merge logic:
+            // MergeClient.tsx already reads ?keep=/?merge= and prefills its own two selects
+            // (built for the Setup -> Users "Looks like X? Merge" hint) - this is a second,
+            // plain GET-form entry point into that same behavior, no client JS needed here.
+            <form action="/setup/users/merge" method="GET" className="flex items-center gap-2 text-xs text-neutral-500 flex-wrap">
+              <span>Duplicate?</span>
+              <select name="keep" defaultValue={selectedMemberId} className="border border-neutral-300 rounded px-2 py-1 text-neutral-700">
+                {allMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <span>is the same as</span>
+              <select name="merge" defaultValue="" required className="border border-neutral-300 rounded px-2 py-1 text-neutral-700">
+                <option value="" disabled>
+                  Select…
+                </option>
+                {allMembers
+                  .filter((m) => m.id !== selectedMemberId)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </select>
+              <button type="submit" className="border border-neutral-300 rounded px-2 py-1 text-neutral-700">
+                Merge →
+              </button>
+            </form>
           )}
 
           {member && growthRows.length > 0 && (
