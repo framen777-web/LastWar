@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 type PendingSelection = { id: number; name: string; role: "keep" | "drop" };
@@ -109,50 +110,87 @@ export function MergeSelectionProvider({ children }: { children: React.ReactNode
 /** Replaces a plain member-name cell for ADMIN - see the call site in app/dashboard/page.tsx. */
 export function MergeableMemberName({ memberId, memberName }: { memberId: number; memberName: string }) {
   const ctx = useContext(MergeContext);
-  const [open, setOpen] = useState(false);
+  // Viewport coordinates of the popup, or null when closed.
+  const [popupPos, setPopupPos] = useState<{ left: number; top: number } | null>(null);
+
+  // The popup is fixed-positioned from a one-off measurement, so it would drift away from
+  // the name if anything scrolled underneath it - close it instead (capture phase, so the
+  // table's own scroll box counts too, not just the page).
+  useEffect(() => {
+    if (!popupPos) return;
+    const close = () => setPopupPos(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [popupPos]);
+
   if (!ctx) return <span className="font-medium">{memberName}</span>;
 
   const isPending = ctx.pending?.id === memberId;
 
+  function toggle(e: React.MouseEvent<HTMLButtonElement>) {
+    if (popupPos) {
+      setPopupPos(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Flip above the name when there isn't room for the ~80px menu below it.
+    const top = rect.bottom + 84 > window.innerHeight ? rect.top - 84 : rect.bottom + 4;
+    setPopupPos({ left: rect.left, top });
+  }
+
   return (
-    <div className="relative inline-block">
+    <>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         disabled={ctx.merging}
         className={`font-medium text-left hover:underline disabled:opacity-50 ${
-          isPending ? (ctx.pending?.role === "keep" ? "text-green-700" : "text-red-700") : ""
+          isPending ? (ctx.pending?.role === "keep" ? "text-green-700" : "text-red-700") : "text-neutral-900"
         }`}
       >
         {memberName}
         {isPending && (ctx.pending?.role === "keep" ? " (keep)" : " (drop)")}
       </button>
 
-      {open && (
-        <>
-          {/* Invisible click-catcher, closes the popup on an outside click without acting. */}
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-30 bg-surface-raised border border-neutral-200 rounded shadow-lg py-1 flex flex-col min-w-[170px]">
-            <button
-              onClick={() => {
-                ctx.choose(memberId, memberName, "keep");
-                setOpen(false);
-              }}
-              className="text-left px-3 py-1.5 text-sm hover:bg-neutral-100"
+      {/* Portaled to <body> rather than rendered in place: this name sits in DataTable's
+          sticky Member column, where every cell is its own z-10 stacking context with an
+          opaque background - rendered in place, the next rows' name cells painted over the
+          popup's buttons (invisible on themes where the popup and cells share a colour),
+          and the table's overflow-auto box would also clip it near the bottom edge. */}
+      {popupPos &&
+        createPortal(
+          <>
+            {/* Invisible click-catcher, closes the popup on an outside click without acting. */}
+            <div className="fixed inset-0 z-40" onClick={() => setPopupPos(null)} />
+            <div
+              style={{ left: popupPos.left, top: popupPos.top }}
+              className="fixed z-50 bg-surface-raised text-neutral-900 border border-neutral-200 rounded shadow-lg py-1 flex flex-col min-w-[170px]"
             >
-              Keep this one
-            </button>
-            <button
-              onClick={() => {
-                ctx.choose(memberId, memberName, "drop");
-                setOpen(false);
-              }}
-              className="text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
-            >
-              Merge away (drop)
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+              <button
+                onClick={() => {
+                  ctx.choose(memberId, memberName, "keep");
+                  setPopupPos(null);
+                }}
+                className="text-left px-3 py-1.5 text-sm text-neutral-900 hover:bg-neutral-100"
+              >
+                Keep this one
+              </button>
+              <button
+                onClick={() => {
+                  ctx.choose(memberId, memberName, "drop");
+                  setPopupPos(null);
+                }}
+                className="text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              >
+                Merge away (drop)
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
+    </>
   );
 }
