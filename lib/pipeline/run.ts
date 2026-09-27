@@ -47,7 +47,12 @@ export async function runPipelineForImage(params: {
     return { filename: params.filename, categoryKey, confidence, status: "needs_review" };
   }
 
-  if (category.verificationMode !== "off") {
+  // Multi-import categories (e.g. Alliance Exercise, which runs several times a week) skip
+  // verification even if a mode is set: an ImportBatch is one per category+week, so every run
+  // that week got merged into one set - same ranks/members from different runs overwrote each
+  // other - and commitBatch() doesn't carry event_date, the dedupKey that keeps the runs apart,
+  // so everything landed under a single "unknown" import on Multi Event review.
+  if (category.verificationMode !== "off" && category.importMode !== "multi") {
     try {
       const extracted = await extract(category, imageBase64, params.mimeType);
 
