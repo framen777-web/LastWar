@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn, type DataTableRow } from "@/components
 import { NumberStepper } from "@/components/NumberStepper";
 import { pickNumberFormat, formatWithRule } from "@/lib/format";
 import { requireMenuAccess } from "@/lib/menuAccess";
+import { MergeSelectionProvider, MergeableMemberName } from "@/components/MergeMemberCell";
 
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const user = await requireMenuAccess(["home-my-stats", "uploads-review"]);
@@ -133,7 +134,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     const rankLabel = rankStat ? `R${rankStat.value}` : "—";
 
     const cells: Record<string, React.ReactNode> = {
-      member: <span className="font-medium">{member.name}</span>,
+      member:
+        user.role === "ADMIN" ? (
+          <MergeableMemberName memberId={member.id} memberName={member.name} />
+        ) : (
+          <span className="font-medium">{member.name}</span>
+        ),
       rank: <span className="text-neutral-500">{rankLabel}</span>,
       air: <span className="text-neutral-500">{formatWithRule(squads?.air, airRule)}</span>,
       tank: <span className="text-neutral-500">{formatWithRule(squads?.tank, tankRule)}</span>,
@@ -176,49 +182,51 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "Detail List" : "Upload Review"}</h1>
+      <MergeSelectionProvider>
+        <h1 className="text-xl font-semibold">{user.role === "MEMBER" ? "Detail List" : "Upload Review"}</h1>
 
-      <form className="flex items-center gap-2 text-sm flex-wrap">
-        <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
-          Go
-        </button>
+        <form className="flex items-center gap-2 text-sm flex-wrap">
+          <button type="submit" className="bg-accent text-accent-contrast rounded px-3 py-1">
+            Go
+          </button>
 
-        <label htmlFor="week" className="font-medium">
-          Week
-        </label>
-        <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="dashboard-known-weeks" />
-        <datalist id="dashboard-known-weeks">
-          {weekNumbers.map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
+          <label htmlFor="week" className="font-medium">
+            Week
+          </label>
+          <NumberStepper id="week" name="week" defaultValue={selectedWeek} min={1} listId="dashboard-known-weeks" />
+          <datalist id="dashboard-known-weeks">
+            {weekNumbers.map((w) => (
+              <option key={w} value={w} />
+            ))}
+          </datalist>
 
-        <label htmlFor="category" className="font-medium">
-          Category
-        </label>
-        <select id="category" name="category" defaultValue={selectedCategory} className="border border-neutral-300 rounded px-2 py-1">
-          <option value="">All categories</option>
-          <option value="squads">Squads</option>
-          {categories.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          <label htmlFor="category" className="font-medium">
+            Category
+          </label>
+          <select id="category" name="category" defaultValue={selectedCategory} className="border border-neutral-300 rounded px-2 py-1">
+            <option value="">All categories</option>
+            <option value="squads">Squads</option>
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
-        {user.role === "ADMIN" && totalRecordCountForWeek > 0 && (
-          <DeleteWeekButton weekNumber={selectedWeek} recordCount={totalRecordCountForWeek} />
+          {user.role === "ADMIN" && totalRecordCountForWeek > 0 && (
+            <DeleteWeekButton weekNumber={selectedWeek} recordCount={totalRecordCountForWeek} />
+          )}
+        </form>
+
+        {members.length === 0 ? (
+          <p className="text-neutral-500 text-sm">No data for week {selectedWeek} yet.</p>
+        ) : (
+          // Table on every screen size here, not the mobile card view - this page is an
+          // editing/review workflow (spot-check completeness, edit, delete), which needs the
+          // real scrollable table, not simplified cards.
+          <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
         )}
-      </form>
-
-      {members.length === 0 ? (
-        <p className="text-neutral-500 text-sm">No data for week {selectedWeek} yet.</p>
-      ) : (
-        // Table on every screen size here, not the mobile card view - this page is an
-        // editing/review workflow (spot-check completeness, edit, delete), which needs the
-        // real scrollable table, not simplified cards.
-        <DataTable columns={columns} rows={rows} defaultSort={{ key: "member", direction: "asc" }} />
-      )}
+      </MergeSelectionProvider>
     </div>
   );
 }
