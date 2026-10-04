@@ -23,6 +23,7 @@ export type Category = {
   cumulative: boolean;
   summaryMode: string;
   verificationMode: string;
+  restrictToOwnAlliance: boolean;
 };
 
 type FormState = {
@@ -40,6 +41,7 @@ type FormState = {
   cumulative: boolean;
   summaryMode: "sum" | "average" | "max" | "min" | "selected_week";
   verificationMode: "off" | "rank_single" | "rank_multi_team" | "per_member";
+  restrictToOwnAlliance: boolean;
 };
 
 const SHAPES = Object.keys(SHAPE_FIELDS);
@@ -67,6 +69,7 @@ function emptyForm(shape: string, name = ""): FormState {
     cumulative: false,
     summaryMode: "selected_week",
     verificationMode: "off",
+    restrictToOwnAlliance: false,
   };
 }
 
@@ -90,6 +93,7 @@ function formFromCategory(cat: Category): FormState {
     verificationMode: (["off", "rank_single", "rank_multi_team", "per_member"].includes(cat.verificationMode)
       ? cat.verificationMode
       : "off") as FormState["verificationMode"],
+    restrictToOwnAlliance: cat.restrictToOwnAlliance,
   };
 }
 
@@ -171,6 +175,7 @@ export function CategoryForm({
         : form.shape === "roster" && form.verificationMode !== "per_member"
           ? "off"
           : form.verificationMode,
+      restrictToOwnAlliance: !isFreeText && form.shape === "ranking_list" ? form.restrictToOwnAlliance : false,
     };
 
     const url = editing ? `/api/categories/${editing.id}` : "/api/categories";
@@ -369,6 +374,19 @@ export function CategoryForm({
           </p>
         )}
       </div>
+
+      {form.shape === "ranking_list" && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.restrictToOwnAlliance}
+            onChange={(e) => setForm((f) => ({ ...f, restrictToOwnAlliance: e.target.checked }))}
+          />
+          This screen can include other alliances&apos; members (e.g. Canyon Storm) - ignore any row
+          whose alliance tag isn&apos;t ours, and judge completeness by roster size instead of rank
+          numbers.
+        </label>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium">Fields to store</label>

@@ -19,6 +19,7 @@ export type CategoryInput = {
   conductorUnitSize?: number | null;
   conductorFlatValue?: number | null;
   verificationMode?: string;
+  restrictToOwnAlliance?: boolean;
 };
 
 export type ValidationError = { field: string; message: string };
@@ -122,6 +123,10 @@ export function validateCategoryInput(input: CategoryInput): ValidationError[] {
   // makes sense for it - rank_single/rank_multi_team stay ranking_list-only.
   if (input.shape === "roster" && input.verificationMode && !["off", "per_member"].includes(input.verificationMode)) {
     errors.push({ field: "verificationMode", message: "Roster categories only support 'per_member' verification (no ranks to check)." });
+  }
+
+  if (input.restrictToOwnAlliance && input.shape !== "ranking_list") {
+    errors.push({ field: "restrictToOwnAlliance", message: "Only ranking-list categories can restrict to the alliance's own members." });
   }
 
   return errors;

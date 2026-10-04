@@ -39,6 +39,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
     conductorUnitSize: patch.conductorUnitSize !== undefined ? patch.conductorUnitSize : existing.conductorUnitSize,
     conductorFlatValue: patch.conductorFlatValue !== undefined ? patch.conductorFlatValue : existing.conductorFlatValue,
     verificationMode: patch.verificationMode ?? existing.verificationMode,
+    restrictToOwnAlliance: patch.restrictToOwnAlliance !== undefined ? patch.restrictToOwnAlliance : existing.restrictToOwnAlliance,
   };
 
   const errors = validateCategoryInput(merged);
@@ -85,6 +86,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/categories
         : merged.shape === "roster" && merged.verificationMode !== "per_member"
           ? "off"
           : (merged.verificationMode ?? "off"),
+      restrictToOwnAlliance: merged.shape === "ranking_list" ? (merged.restrictToOwnAlliance ?? false) : false,
     },
   });
 

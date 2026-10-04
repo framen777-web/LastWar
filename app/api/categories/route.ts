@@ -91,6 +91,7 @@ export async function POST(request: Request) {
           : body.shape === "roster" && body.verificationMode !== "per_member"
             ? "off"
             : (body.verificationMode ?? "off"),
+      restrictToOwnAlliance: body.shape === "ranking_list" ? (body.restrictToOwnAlliance ?? false) : false,
     },
   });
 

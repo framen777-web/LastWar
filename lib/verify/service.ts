@@ -5,6 +5,8 @@ import type { Category } from "@/lib/generated/prisma/client";
 import { mergeRows, mergeFreeTextRows, validateBatch, type MergedRow, type ScreenshotGroup, type BatchValidation } from "./validate";
 import { computeSquadIssues, type SquadIssue } from "./squadIssues";
 import { computeHqIssues, type HqIssue } from "./hqIssues";
+import { hasAllianceTag } from "@/lib/pipeline/matchMemberCore";
+import { getAllianceTag } from "@/lib/settings";
 
 type ManualEntryInput = { team: string | null; memberName: string; rank: number | null; value: number | null; fields: string | null };
 
@@ -30,7 +32,8 @@ export async function listPendingBatches(): Promise<BatchSummary[]> {
       category.verificationMode as "rank_single" | "rank_multi_team" | "per_member",
       batch.categoryKey,
       batch.weekNumber,
-      rows
+      rows,
+      category.restrictToOwnAlliance
     );
     summaries.push({ categoryKey: batch.categoryKey, categoryName: category.name, weekNumber: batch.weekNumber, validation });
   }
@@ -50,7 +53,13 @@ export async function getBatchDetail(categoryKey: string, weekNumber: number): P
   if (!batch || batch.status !== "pending") return null;
 
   const rows = await loadMergedRows(category, weekNumber, batch.manualEntries);
-  const validation = await validateBatch(category.verificationMode as "rank_single" | "rank_multi_team" | "per_member", categoryKey, weekNumber, rows);
+  const validation = await validateBatch(
+    category.verificationMode as "rank_single" | "rank_multi_team" | "per_member",
+    categoryKey,
+    weekNumber,
+    rows,
+    category.restrictToOwnAlliance
+  );
 
   return {
     categoryKey,
@@ -78,6 +87,7 @@ async function loadMergedRows(
     }),
     prisma.member.findMany(),
   ]);
+  const allianceTag = category.restrictToOwnAlliance ? await getAllianceTag() : null;
 
   if (category.shape === "free_text") {
     const screenshots = extractions.map((ex) => {
@@ -111,9 +121,10 @@ async function loadMergedRows(
 
     // ranking_list (Kills/VS/Donations/Desert Storm/Canyon Storm/Alliance Exercise/Power)
     const parsed = JSON.parse(ex.rawJson) as RankingListResult;
+    const rows = (parsed.rows ?? []).filter((r) => !allianceTag || hasAllianceTag(r.alliance_tag, allianceTag));
     return {
       winner: parsed.winner,
-      rows: (parsed.rows ?? []).map((r) => ({
+      rows: rows.map((r) => ({
         rank: r.rank,
         memberName: r.member_name,
         value: r.value,
@@ -157,7 +168,13 @@ export async function commitBatch(categoryKey: string, weekNumber: number, ackno
   if (!batch || batch.status !== "pending") throw new Error("No pending batch found for this category/week.");
 
   const rows = await loadMergedRows(category, weekNumber, batch.manualEntries);
-  const validation = await validateBatch(category.verificationMode as "rank_single" | "rank_multi_team" | "per_member", categoryKey, weekNumber, rows);
+  const validation = await validateBatch(
+    category.verificationMode as "rank_single" | "rank_multi_team" | "per_member",
+    categoryKey,
+    weekNumber,
+    rows,
+    category.restrictToOwnAlliance
+  );
 
   if (!validation.isBalanced && !acknowledgeVariance) {
     throw new Error(`This batch has a variance of ${validation.variance} - pass acknowledgeVariance to commit anyway.`);

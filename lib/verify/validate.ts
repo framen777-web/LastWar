@@ -131,7 +131,8 @@ export async function validateBatch(
   mode: "rank_single" | "rank_multi_team" | "per_member",
   categoryKey: string,
   weekNumber: number,
-  rows: MergedRow[]
+  rows: MergedRow[],
+  restrictToOwnAlliance: boolean = false
 ): Promise<BatchValidation> {
   if (mode === "rank_single") {
     const ranks = rows.map((r) => r.rank ?? 0);
@@ -152,8 +153,18 @@ export async function validateBatch(
       maxRank: Math.max(...teamRows.map((r) => r.rank ?? 0)),
       memberCount: teamRows.length,
     }));
-    const expectedTotal = teams.reduce((sum, t) => sum + t.maxRank, 0);
     const extractedTotal = rows.length;
+    if (restrictToOwnAlliance) {
+      // Rank numbers aren't a reliable total once external-alliance rows can be mixed in
+      // or stripped out before the screenshot's taken (Canyon Storm) - judge completeness
+      // by current roster size instead, same approach per_member already uses. `teams` is
+      // still returned for the per-team breakdown shown in the UI, just not used for the
+      // balance check itself.
+      const rosterIds = await getRosterMemberIdsForWeeks(weekNumber);
+      const expectedTotal = rosterIds.size;
+      return { mode, teams, extractedTotal, isBalanced: extractedTotal >= expectedTotal, variance: Math.max(0, expectedTotal - extractedTotal) };
+    }
+    const expectedTotal = teams.reduce((sum, t) => sum + t.maxRank, 0);
     return { mode, teams, extractedTotal, isBalanced: expectedTotal === extractedTotal, variance: Math.abs(expectedTotal - extractedTotal) };
   }
 

@@ -92,6 +92,16 @@ model Category {
   // instead of writing immediately - see lib/verify/.
   verificationMode String @default("off")
 
+  // When true (ranking_list shape only), a row whose alliance_tag doesn't match the
+  // configured alliance tag (Setup -> General) is dropped before matching/merging/
+  // counting - for an event where the screenshot can include another alliance's members
+  // (Canyon Storm). Also switches rank_multi_team's balance check from summed max-rank to
+  // current roster size, since rank numbers are no longer a reliable total once external
+  // rows are mixed in or stripped out before the screenshot's taken. Desert Storm (no
+  // external alliance involved, and its screenshots don't show alliance tags at all)
+  // leaves this off - defaults off for every category, including existing ones.
+  restrictToOwnAlliance Boolean @default(false)
+
   active       Boolean  @default(true)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
